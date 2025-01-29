@@ -56,8 +56,8 @@ class Events {
 
                 if (this.centralManagerUdpPort && this.centralManagerUdpAddress) {
                     const udpClient = dgram.createSocket('udp4');
-                    const alertMessage = Buffer.from(alertMessage);
-                    udpClient.send(alertMessage, 0, alertMessage.length, this.centralManagerUdpPort, this.centralManagerUdpAddress, (err) => {
+                    const alertBuffer = Buffer.from(alertMessage);
+                    udpClient.send(alertBuffer, 0, alertBuffer.length, this.centralManagerUdpPort, this.centralManagerUdpAddress, (err) => {
                         if (err) console.error('Failed to send alert: ', err);
                     });
                     udpClient.close();
