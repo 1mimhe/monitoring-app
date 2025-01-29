@@ -1,0 +1,19 @@
+{
+  "name": "monitor-app-agent",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {
+    "start": "nodemon app.js"
+  },
+  "keywords": [],
+  "author": "Mohammad Hosseini",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "auto-bind": "^4.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "humanize-duration": "^3.32.1",
+    "nodemon": "^3.1.9"
+  }
+}

@@ -1,0 +1,8 @@
+/REST/Agent/node_modules
+/REST/Agent/package-lock.json
+/REST/Central-Manager/node_modules
+/REST/Central-Manager/package-lock.json
+/Socket/Agent/node_modules
+/Socket/Agent/package-lock.json
+/Socket/Central-Manager/node_modules
+/Socket/Central-Manager/package-lock.json

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitoring App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+
+body {
+      font-family: 'Poppins', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(to right, #f9f9f9, #e9efff);
+      color: #333;
+    }
+
+    .container {
+      width: 90%;
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    h2 {
+      font-size: 1.8em;
+      margin-bottom: 15px;
+      color: #35898f;
+      text-align: center;
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    label {
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #35898f;
+    }
+
+    input[type="text"] {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 1em;
+      transition: border-color 0.3s;
+    }
+
+    input[type="text"]:focus {
+      border-color: #35898f;
+      outline: none;
+    }
+
+    button {
+      padding: 12px 18px;
+      background-color: #35898f;
+      color: #fff;
+      font-size: 1em;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #35898f;
+    }
+
+    .result {
+      font-size: 14px;
+      line-height: 1.5;
+      margin-top: 20px;
+    }
+
+    .result .json-container {
+      padding: 15px;
+      background: #f4f8ff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .json-key {
+      font-weight: 600;
+      color: #35898f;
+    }
+
+    .json-value {
+      font-family: monospace;
+      color: #333;
+    }
+
+    .json-object {
+      margin-left: 20px;
+      border-left: 2px solid #ddd;
+      padding-left: 10px;
+    }
+
+    .toggle {
+      font-size: 0.9em;
+      cursor: pointer;
+      color: #35898f;
+      margin-bottom: 5px;
+    }
+
+    .toggle:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 15px;
+      }
+
+      h2 {
+        font-size: 1.5em;
+      }
+
+      button {
+        font-size: 0.9em;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Enter Agent IP and Port</h2>
+  <form id="dataForm">
+    <div class="form-group">
+      <label for="ip">IP Address:</label>
+      <input type="text" id="ip" name="ip" placeholder="Enter IP Address" required>
+    </div>
+    <div class="form-group">
+      <label for="port">Port:</label>
+      <input type="text" id="port" name="port" placeholder="Enter Port Number" required>
+    </div>
+    <button type="submit">Submit</button>
+    <button type="button" id="rebootButton" style="background-color: #615959;">Reboot System</button>
+  </form>
+</div>
+
+<div class="container">
+  <h2>Result</h2>
+  <div id="result" class="result">
+    <div id="jsonOutput" class="json-container"></div>
+  </div>
+</div>
+
+<script>
+  document.getElementById('dataForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+
+    const ip = document.getElementById('ip').value;
+    const port = document.getElementById('port').value;
+    
+    try {
+      const response = await (await fetch(`http://${ip}:${port}/system-info`)).json();
+      
+      if (!response.success) throw new Error('Failed to fetch data.');
+      visualizeJson(response);
+    } catch (error) {
+      document.getElementById('jsonOutput').innerHTML = `<p style="color:red;">Error: ${error.message}</p>`;
+    }
+  });
+
+  document.getElementById('rebootButton').addEventListener('click', async function () {
+    const ip = document.getElementById('ip').value;
+    const port = document.getElementById('port').value;
+
+    if (confirm('Are you sure you want to reboot the system?')) {
+      try {
+        const response = await (await fetch(`http://${ip}:${port}/reboot-system`, {
+          method: 'POST'
+        })).json();
+        
+        if (!response.success) throw new Error('Failed to reboot system.');
+
+        alert('System is rebooting...');
+      } catch (error) {
+        alert(`Error: ${error.message}`);
+      }
+    }
+  });
+
+  function visualizeJson(data, parent = null) {
+    const container = parent || document.getElementById('jsonOutput');
+    container.innerHTML = '';
+
+    Object.keys(data).forEach(key => {
+      const value = data[key];
+      const keyElement = document.createElement('div');
+      keyElement.innerHTML = `<span class="json-key">${key}:</span>`;
+
+      if (typeof value === 'object' && value !== null) {
+        const toggle = document.createElement('span');
+        toggle.textContent = ' [Expand]';
+        toggle.classList.add('toggle');
+        toggle.addEventListener('click', () => {
+          nestedContainer.style.display =
+            nestedContainer.style.display === 'none' ? 'block' : 'none';
+          toggle.textContent =
+            toggle.textContent === ' [Expand]' ? ' [Collapse]' : ' [Expand]';
+        });
+
+        keyElement.appendChild(toggle);
+
+        const nestedContainer = document.createElement('div');
+        nestedContainer.classList.add('json-object');
+        nestedContainer.style.display = 'none';
+        visualizeJson(value, nestedContainer);
+        keyElement.appendChild(nestedContainer);
+      } else {
+        keyElement.innerHTML += ` <span class="json-value">${JSON.stringify(
+          value,
+          null,
+          2
+        )}</span>`;
+      }
+
+      container.appendChild(keyElement);
+    });
+  }
+</script>
+
+</body>
+</html>
