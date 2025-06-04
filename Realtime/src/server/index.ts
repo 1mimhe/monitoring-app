@@ -17,7 +17,7 @@ const io = new Server<
   SocketData
 >(server);
 
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.static(path.join(__dirname, '../../public')));
 
 const redis = createClient({
   url: process.env.REDIS_URL ?? undefined

@@ -3,9 +3,9 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  init: (name: string) => void;
-  message: (msg: string) => void;
-  broadcast: (msg: string) => void;
+  init: (name: string, ack: () => void) => void;
+  message: (msg: string, ack: () => void) => void;
+  broadcast: (msg: string, ack: () => void) => void;
 }
 
 export interface InterServerEvents {

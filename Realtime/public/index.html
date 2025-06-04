@@ -49,10 +49,31 @@
         padding: 0;
       }
       #messages > li {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
         padding: 0.5rem 1rem;
+        border-bottom: 1px solid #ccc;
+        font-size: 1rem;
       }
-      #messages > li:nth-child(odd) {
-        background: #efefef;
+
+      .timestamp {
+        font-size: 0.75rem;
+        color: #888;
+        margin-left: 1rem;
+        white-space: nowrap;
+      }
+
+      .message-normal {
+        background-color: #ffffff;
+      }
+
+      .message-broadcast {
+        background-color: #d0ebff;
+      }
+
+      .message-admin {
+        background-color: #fff3cd;
       }
     </style>
   </head>
@@ -63,8 +84,7 @@
       <button id="send">Send</button>
       <button id="broadcast">Broadcast</button>
     </form>
-    <script>
-    </script>
+    <script></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/chat.js"></script>
   </body>
