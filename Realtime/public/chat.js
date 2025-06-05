@@ -3,8 +3,19 @@ const socket = io({
   retries: 3
 });
 
-const pcName = prompt('Enter your PC name:');
-socket.emit('init', pcName);
+const { pcName, room } = Qs.parse(location.search, { ignoreQueryPrefix: true });
+socket.emit('join', { pcName, room });
+
+// Header
+document.getElementById('room-name').textContent = `Room: ${room}`;
+document.getElementById('pc-name').textContent = `PC: ${pcName}`;
+
+function updateTime() {
+  const now = new Date();
+  document.getElementById('current-time').textContent = now.toLocaleTimeString();
+}
+setInterval(updateTime, 1000);
+updateTime();
 
 const $input = document.getElementById('input');
 const $messages = document.getElementById('messages');

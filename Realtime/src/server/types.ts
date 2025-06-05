@@ -1,9 +1,9 @@
 export interface ServerToClientEvents {
-  message: (msg: string) => void;
+  message: (msg: string, type?: MessageTypes, sender?: string, ack?: () => void) => void;
 }
 
 export interface ClientToServerEvents {
-  init: (name: string, ack: () => void) => void;
+  join: (user: { pcName: string; room: string }, ack: () => void) => void;
   message: (msg: string, ack: () => void) => void;
   broadcast: (msg: string, ack: () => void) => void;
 }
@@ -14,4 +14,11 @@ export interface InterServerEvents {
 
 export interface SocketData {
   pcName: string;
+  room: string;
+}
+
+export enum MessageTypes {
+  Normal = 'normal',
+  Broadcast = 'broadcast',
+  Admin = 'admin'
 }
