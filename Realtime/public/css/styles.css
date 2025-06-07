@@ -99,15 +99,28 @@ body {
 }
 
 .message-normal {
-  background-color: #ffffff;
+  background-color: #fdfdfd;
+  color: #333;
+}
+
+.message-warning {
+  background-color: #ffe5e5;
+  color: #7f1d1d;
 }
 
 .message-broadcast {
-  background-color: #d0ebff;
+  background-color: #e6ffed;
+  color: #1b5e20;
 }
 
-.message-admin {
-  background-color: #fff3cd;
+.message-other {
+  background-color: #e6f0ff;
+  color: #0d47a1;
+}
+
+.message-system {
+  background-color: #fff9db;
+  color: #7c5700;
 }
 
 /* Form styles - Fixed to bottom */
@@ -309,4 +322,102 @@ body {
 
 #sidebar li.offline {
   color: #aaa;
+}
+
+/* Animated selection line for chat selection */
+.system-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.selection-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: linear-gradient(90deg, #00bcd4, #4caf50);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+  opacity: 0;
+}
+
+.system-item.selected .selection-line {
+  width: 100%;
+  opacity: 1;
+}
+
+/* Shimmer effect on the selection line */
+.selection-line::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { 
+    transform: translateX(-100%); 
+  }
+  100% { 
+    transform: translateX(100%); 
+  }
+}
+
+/* Alternative: Left border selection indicator */
+.selection-border {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #00bcd4;
+  transform: scaleY(0);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: bottom;
+  z-index: 1;
+}
+
+.system-item.selected .selection-border {
+  transform: scaleY(1);
+}
+
+/* Enhanced selected state styling */
+.system-item.selected {
+  background-color: rgba(0, 188, 212, 0.1);
+  border-left: 3px solid #00bcd4;
+}
+
+.system-item.selected .system-name {
+  color: #00bcd4;
+  font-weight: bold;
+}
+
+/* Ensure content stays above the selection line */
+#sidebar li {
+  position: relative;
+}
+
+#sidebar li > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* Pulse animation for active chat */
+.system-item.selected.active-chat {
+  animation: pulse-glow 2s infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(0, 188, 212, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(0, 188, 212, 0.6);
+  }
 }

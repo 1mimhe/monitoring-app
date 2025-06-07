@@ -41,7 +41,7 @@ export type SocketType = Socket<
 export enum MessageTypes {
   Normal = 'normal',
   Broadcast = 'broadcast',
-  Admin = 'admin',
+  OtherSide = 'other',
   System = 'system'
 }
 

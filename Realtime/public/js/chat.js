@@ -64,12 +64,14 @@ function updateChatStatus() {
       $sendButton.textContent = 'Send to User';
       $sendButton.removeAttribute('disabled');
       $closeChatButton.style.display = 'inline-block';
+      addSelectionFeedback(selectedChat, 'select');
     } else {
       statusDiv.textContent = 'No chat selected - Broadcast mode';
       statusDiv.style.color = '#ff9800';
       $sendButton.textContent = 'Send';
       $sendButton.setAttribute('disabled', 'disabled');
       $closeChatButton.style.display = 'none';
+      addSelectionFeedback(null, 'close');
     }
   }
 }
@@ -164,26 +166,6 @@ function sendBroadcast() {
   }
 }
 
-function selectChat(pcName) {
-  if (role !== 'admin') return;
-
-  socket.emit('selectChat', pcName, () => {
-    selectedChat = pcName;
-    updateChatStatus();
-    renderSystems();
-  });
-}
-
-function closeChat() {
-  if (role !== 'admin') return;
-
-  socket.emit('closeChat', () => {
-    selectedChat = null;
-    updateChatStatus();
-    renderSystems();
-  });
-}
-
 // Socket connection
 socket.emit('join', { pcName, room, role }, (response) => {
   if (response?.error) {
@@ -196,7 +178,6 @@ socket.emit('join', { pcName, room, role }, (response) => {
 socket.on('join', ({ pcName: joinedPcName, room: joinedRoom }) => {
   systems.set(joinedPcName, { online: true });
   renderSystems();
-  addMessage(`${joinedPcName} joined the room`, 'admin', 'System');
 });
 
 socket.on('userList', (users) => {
@@ -226,7 +207,6 @@ socket.on('dis', (pcName) => {
     const data = systems.get(pcName);
     systems.set(pcName, { ...data, online: false });
     renderSystems();
-    addMessage(`${pcName} disconnected`, 'admin', 'System');
 
     if (role === 'admin' && selectedChat === pcName) {
       selectedChat = null;
@@ -461,10 +441,19 @@ function renderSystems() {
 
   systems.forEach((data, pc) => {
     const li = document.createElement('li');
-    li.style.cssText = 'display: flex; flex-direction: column; padding: 0.75rem 0.5rem; cursor: pointer; border-bottom: 1px solid #34495e; transition: all 0.3s;';
+    li.classList.add('system-item');
+    li.style.cssText = 'display: flex; flex-direction: column; padding: 0.75rem 0.5rem; cursor: pointer; border-bottom: 1px solid #34495e; transition: all 0.3s; position: relative;';
+
+    const selectionLine = document.createElement('div');
+    selectionLine.classList.add('selection-line');
+    li.appendChild(selectionLine);
+
+    const selectionBorder = document.createElement('div');
+    selectionBorder.classList.add('selection-border');
+    li.appendChild(selectionBorder);
 
     const mainRow = document.createElement('div');
-    mainRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
+    mainRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 2;';
 
     const leftSection = document.createElement('div');
     leftSection.style.cssText = 'display: flex; align-items: center;';
@@ -476,11 +465,12 @@ function renderSystems() {
 
     const pcName = document.createElement('span');
     pcName.textContent = pc;
+    pcName.classList.add('system-name');
 
     if (role === 'admin' && selectedChat === pc) {
+      li.classList.add('selected', 'active-chat');
       pcName.style.fontWeight = 'bold';
       pcName.style.color = '#00bcd4';
-      li.style.backgroundColor = '#34495e';
     }
 
     leftSection.appendChild(indicator);
@@ -489,7 +479,7 @@ function renderSystems() {
 
     if (role === 'admin' && data.online) {
       const buttonsSection = document.createElement('div');
-      buttonsSection.style.cssText = 'display: flex; gap: 0.25rem; margin-top: 0.5rem;';
+      buttonsSection.style.cssText = 'display: flex; gap: 0.25rem; margin-top: 0.5rem; position: relative; z-index: 2;';
 
       const chatButton = document.createElement('button');
       chatButton.textContent = selectedChat === pc ? 'Selected' : 'Chat';
@@ -559,6 +549,71 @@ function renderSystems() {
 
     $systemList.appendChild(li);
   });
+}
+
+function selectChat(pcName) {
+  if (role !== 'admin') return;
+
+  const allItems = document.querySelectorAll('.system-item');
+  allItems.forEach(item => {
+    item.classList.remove('selected', 'active-chat');
+  });
+
+  socket.emit('selectChat', pcName, () => {
+    selectedChat = pcName;
+    updateChatStatus();
+
+    renderSystems();
+      const selectedItem = Array.from(document.querySelectorAll('.system-item')).find(item => {
+      const nameSpan = item.querySelector('.system-name');
+      return nameSpan && nameSpan.textContent === pcName;
+    });
+
+    if (selectedItem) {
+      selectedItem.classList.add('selected', 'active-chat');
+    }
+  });
+}
+
+function closeChat() {
+  if (role !== 'admin') return;
+
+  const currentSelectedItem = document.querySelector('.system-item.selected');
+  
+  socket.emit('closeChat', () => {
+    selectedChat = null;
+    updateChatStatus();
+    
+    if (currentSelectedItem) {
+      currentSelectedItem.style.transition = 'all 0.3s ease';
+      currentSelectedItem.classList.remove('selected', 'active-chat');
+      renderSystems();
+    } else {
+      renderSystems();
+    }
+  });
+}
+
+function addSelectionFeedback(pcName, action = 'select') {
+  const statusDiv = document.getElementById('chat-status') || createChatStatusDiv();
+  
+  if (action === 'select') {
+    statusDiv.style.transform = 'scale(1.05)';
+    statusDiv.style.background = 'rgba(76, 175, 80, 0.9)';
+    
+    setTimeout(() => {
+      statusDiv.style.transform = 'scale(1)';
+      statusDiv.style.background = 'rgba(0,0,0,0.8)';
+    }, 200);
+  } else if (action === 'close') {
+    statusDiv.style.transform = 'scale(0.95)';
+    statusDiv.style.background = 'rgba(244, 67, 54, 0.9)';
+    
+    setTimeout(() => {
+      statusDiv.style.transform = 'scale(1)';
+      statusDiv.style.background = 'rgba(0,0,0,0.8)';
+    }, 200);
+  }
 }
 
 if (role === 'admin') {

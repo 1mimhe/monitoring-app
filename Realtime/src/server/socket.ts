@@ -36,7 +36,7 @@ export function registerSocketEvents(
       userSockets.set(`${pcName}:${room}`, socket);
       
       const adminSocket = adminSockets.get(room);
-      adminSocket?.emit('message', `User ${pcName} joined.`, MessageTypes.Admin, 'System');
+      adminSocket?.emit('message', `User ${pcName} joined to the room.`, MessageTypes.System, 'System');
       adminSocket?.emit('join', { pcName, room });
 
       socket.data.infoInterval = setInterval(async () => {
@@ -48,7 +48,7 @@ export function registerSocketEvents(
         }
       }, 5000);
       
-      socket.emit('message', `Welcome ${pcName}`, MessageTypes.Admin, 'System');
+      socket.emit('message', `Welcome ${pcName}`, MessageTypes.System, 'System');
     }
    
     logger.info(`User joined -> ${pcName} in Room ${room} as ${role}`);
@@ -61,7 +61,7 @@ export function registerSocketEvents(
     }
     
     adminSelectedChats.set(socket.id, selectedPcName);
-    socket.emit('message', `Now chatting with ${selectedPcName}`, MessageTypes.Admin, 'System');
+    socket.emit('message', `Chatting with ${selectedPcName}`, MessageTypes.System, 'System');
     callback({ success: true });
   });
 
@@ -71,29 +71,8 @@ export function registerSocketEvents(
     }
     
     adminSelectedChats.delete(socket.id);
-    socket.emit('message', 'Chat cleared. You can now broadcast to all users.', MessageTypes.Admin, 'System');
+    socket.emit('message', 'Chat closed.', MessageTypes.System, 'System');
     callback({ success: true });
-  });
-
-  socket.on('disconnect', () => {
-    const { pcName, room, role } = socket.data;
-    
-    if (role === Roles.User) {
-      userSockets.delete(`${pcName}:${room}`);
-      
-      if (socket.data.infoInterval) {
-        clearInterval(socket.data.infoInterval);
-      }
-      
-      const adminSocket = adminSockets.get(room);
-      adminSocket?.emit('dis', pcName);
-      adminSocket?.emit('message', `User ${pcName} disconnected.`, MessageTypes.Admin, 'System');
-    } else if (role === Roles.Admin) {
-      adminSockets.delete(socket.id);
-      adminSelectedChats.delete(socket.id);
-    }
-    
-    logger.warn(`User ${pcName} disconnected.`);
   });
 
   socket.on('message', (msg, callback) => {
@@ -101,19 +80,16 @@ export function registerSocketEvents(
     
     if (socket.data.role === Roles.User) {
       const adminSocket = adminSockets.get(socket.data.room);
-      adminSocket?.emit('message', msg, MessageTypes.Normal, socket.data.pcName);
+      adminSocket?.emit('message', msg, MessageTypes.OtherSide, socket.data.pcName);
 
       socket.emit('message', msg, MessageTypes.Normal, 'You');
     } else if (socket.data.role === Roles.Admin) {
-      // Admin message - check if they have a selected chat
       const selectedPcName = adminSelectedChats.get(socket.id);
-      
       if (selectedPcName) {
-        // Send to specific user
         const targetSocket = userSockets.get(`${selectedPcName}:${socket.data.room}`);
         if (targetSocket) {
-          targetSocket.emit('message', msg, MessageTypes.Normal, 'Admin');
-          socket.emit('message', msg, MessageTypes.Normal, 'You');
+          targetSocket.emit('message', msg, MessageTypes.OtherSide, 'Admin');
+          socket.emit('message', msg, MessageTypes.Normal, `You to ${targetSocket.data.pcName}`);
         } else {
           socket.emit('error', `User ${selectedPcName} not found or disconnected`);
         }
@@ -132,5 +108,26 @@ export function registerSocketEvents(
     socket.emit('message', msg, MessageTypes.Broadcast, 'You');
     
     callback({ success: true });
+  });
+
+  socket.on('disconnect', () => {
+    const { pcName, room, role } = socket.data;
+    
+    if (role === Roles.User) {
+      userSockets.delete(`${pcName}:${room}`);
+      
+      if (socket.data.infoInterval) {
+        clearInterval(socket.data.infoInterval);
+      }
+      
+      const adminSocket = adminSockets.get(room);
+      adminSocket?.emit('dis', pcName);
+      adminSocket?.emit('message', `User ${pcName} disconnected.`, MessageTypes.System, 'System');
+    } else if (role === Roles.Admin) {
+      adminSockets.delete(socket.id);
+      adminSelectedChats.delete(socket.id);
+    }
+    
+    logger.warn(`User ${pcName} disconnected.`);
   });
 }

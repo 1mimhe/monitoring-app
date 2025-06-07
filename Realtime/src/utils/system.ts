@@ -145,15 +145,4 @@ export class SystemUtilities {
       return proc;
     });
   }
-
-  async rebootSystem(): Promise<void> {
-    const command = process.platform === 'win32' ? 'shutdown /r /t 0' : 'sudo reboot';
-
-    try {
-      const { stderr } = await execAsync(command);
-      if (stderr) throw new Error(`Error output: ${stderr}`);
-    } catch (error) {
-      throw new Error(`Error restarting system: ${(error as Error).message}`);
-    }
-  }
 }
