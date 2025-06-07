@@ -6,7 +6,6 @@ import { Server } from 'socket.io';
 import { ClientToServerEvents, InterServerEvents, ServerToClientEvents, SocketData } from './types';
 import logger from '../utils/logger';
 import { registerSocketEvents } from './socket';
-import { createClient } from '@redis/client';
 
 const app = express();
 const server = http.createServer(app);
@@ -15,17 +14,14 @@ const io = new Server<
   ServerToClientEvents,
   InterServerEvents,
   SocketData
->(server);
+>(server, {
+  connectionStateRecovery: {}
+});
 
 app.use(express.static(path.join(__dirname, '../../public')));
 
-const redis = createClient({
-  url: process.env.REDIS_URL ?? undefined
-});
-redis.connect().catch(console.error);
-
 io.on('connection', (socket) => {
-  registerSocketEvents(socket, io, redis);
+  registerSocketEvents(socket, io);
 });
 
 const PORT = process.env.PORT ?? 3000;

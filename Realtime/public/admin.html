@@ -10,8 +10,7 @@
       <div class="centered-form__box">
         <h1>Join</h1>
         <form action="/chat.html">
-          <label>PC name</label>
-          <input type="text" name="pcName" placeholder="PC name" required />
+          <input type="hidden" name="pcName" value="Admin" />
           <label>Room</label>
           <input
             type="text"
@@ -20,7 +19,7 @@
             required
             value="Default"
           />
-          <input type="hidden" name="role" value="user" />
+          <input type="hidden" name="role" value="admin" />
           <button>Join</button>
         </form>
       </div>

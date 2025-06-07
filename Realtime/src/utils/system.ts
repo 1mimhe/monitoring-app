@@ -34,14 +34,16 @@ interface CPUUsage {
 
 type ProcessInfo = Record<string, string>;
 
-class SystemUtilities {
-  async getSystemInfo(): Promise<{
-    os: OSInfo;
-    memory: MemoryInfo;
-    cpu: CPUInfo;
-    processes: ProcessInfo[];
-    networkInterfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]>;
-  }> {
+export interface SystemInfo {
+  os: OSInfo;
+  memory: MemoryInfo;
+  cpu: CPUInfo;
+  processes: ProcessInfo[];
+  networkInterfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]>;
+}
+
+export class SystemUtilities {
+  async getSystemInfo(): Promise<SystemInfo> {
     const osInfo: OSInfo = {
       platform: os.platform(),
       type: os.type(),
@@ -155,5 +157,3 @@ class SystemUtilities {
     }
   }
 }
-
-export default new SystemUtilities();
