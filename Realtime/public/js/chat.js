@@ -61,7 +61,7 @@ function updateChatStatus() {
     if (selectedChat) {
       statusDiv.textContent = `Chatting with: ${selectedChat}`;
       statusDiv.style.color = '#4caf50';
-      $sendButton.textContent = 'Send to User';
+      $sendButton.textContent = `Send to ${selectedChat}`;
       $sendButton.removeAttribute('disabled');
       $closeChatButton.style.display = 'inline-block';
       addSelectionFeedback(selectedChat, 'select');
