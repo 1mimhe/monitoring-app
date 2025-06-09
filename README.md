@@ -49,15 +49,31 @@ The Socket.IO implementation provides instant bidirectional communication betwee
 
 ## How to Run the Socket.IO Real-time Version
 
-### Starting the Server
-Navigate to the Socket.IO version directory and start the central manager:
+### 1. Clone the Repository
+Clone the project repository to your local machine or VMs.
 
 ```bash
-cd socketio-version
-npm start
+git clone https://github.com/1mimhe/monitoring-app
+cd monitoring-app/Realtime
 ```
 
-### Accessing the Application
+### 2. Install Dependencies
+Run the following command to install the required dependencies.
+
+```bash
+npm install
+```
+
+### 3. Configuration
+Set `PORT` environment variable.
+
+### 4. Starting the Server
+
+```bash
+npm run dev
+```
+
+### 5. Accessing the Application
 
 #### For Regular Users (Agents):
 Open your web browser and navigate to:
@@ -80,7 +96,7 @@ Clone the project repository to your local machine or VMs.
 
 ```bash
 git clone https://github.com/1mimhe/monitoring-app
-cd monitoring-app
+cd monitoring-app/Socket
 ```
 
 ### 2. Install Dependencies
