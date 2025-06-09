@@ -42,7 +42,8 @@ export enum MessageTypes {
   Normal = 'normal',
   Broadcast = 'broadcast',
   OtherSide = 'other',
-  System = 'system'
+  System = 'system',
+  Warning = 'warning'
 }
 
 export enum Roles {

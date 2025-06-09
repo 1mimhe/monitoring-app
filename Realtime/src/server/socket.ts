@@ -42,7 +42,18 @@ export function registerSocketEvents(
       socket.data.infoInterval = setInterval(async () => {
         try {
           const info = await systemUtilities.getSystemInfo();
-          adminSocket?.emit('info', info, pcName);          
+          adminSocket?.emit('info', info, pcName);
+
+          if (info.cpu.usedCpu >= 70) {
+            adminSocket?.emit('message',
+              `${socket.data.pcName} cpu usage is ${info.cpu.usedCpu}%`,
+              MessageTypes.Warning, 'System');
+          }
+          if (info.memory.memoryUsagePercentage >= 70) {
+            adminSocket?.emit('message',
+              `${socket.data.pcName} memory usage is ${info.memory.memoryUsagePercentage}%`,
+              MessageTypes.Warning, 'System');
+          }
         } catch (error) {
           logger.error(`Error getting system info for ${pcName}:`, error);
         }
