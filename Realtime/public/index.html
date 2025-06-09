@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Monitoring App Chat</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <div class="centered-form">
+      <div class="centered-form__box">
+        <h1>Join</h1>
+        <form action="/chat.html">
+          <label>PC name</label>
+          <input type="text" name="pcName" placeholder="PC name" required />
+          <label>Room</label>
+          <input
+            type="text"
+            name="room"
+            placeholder="Room"
+            required
+            value="Default"
+          />
+          <input type="hidden" name="role" value="user" />
+          <button>Join</button>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>

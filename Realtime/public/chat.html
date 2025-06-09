@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Monitoring App Chat</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <div id="popup"></div>
+    <header id="chat-header">
+      <div class="header-section">
+        <h2 id="room-name"></h2>
+        <p id="pc-name"></p>
+      </div>
+      <p id="current-time"></p>
+    </header>
+    <div class="main-container">
+      <div class="content-area">
+        <ul id="messages"></ul>
+        <form id="form" action="">
+          <input id="input" autocomplete="off" />
+          <button id="send">Send to Admin</button>
+          <button id="broadcast">Broadcast</button>
+          <button id="close-chat" hidden onclick="closeChatWithAnimation()">Close Chat</button>
+        </form>
+      </div>
+      <div id="sidebar" hidden>
+        <br/>
+        <h3>Systems</h3>
+        <ul id="system-list"></ul>
+      </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qs/6.6.0/qs.min.js"></script>
+    <script src="/js/chat.js"></script>
+  </body>
+</html>
