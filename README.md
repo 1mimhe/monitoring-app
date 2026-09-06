@@ -1,122 +1,185 @@
-# Agent-Central Manager Monitoring System
+# System Monitoring Mini-Project
 
-A distributed monitoring system where agents (users) connect to a central manager (admin) over TCP, REST API, or real-time Socket.IO connections. Agents monitor for events, send alerts, and execute commands received from the central manager.
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg?logo=node.js)](https://nodejs.org/)
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-4.8-white.svg?logo=socket.io)](https://socket.io/)
+[![Express](https://img.shields.io/badge/Express-4.21-lightgrey.svg?logo=express)](https://expressjs.com/)
 
-## Features in Socket.IO Real-time Version
+A Node.js and TypeScript mini-project that monitors system metrics (CPU usage, memory, OS information, and running processes) across machines using an **Agent and Central Manager** model.
 
-### Real-time Communication Architecture
-The Socket.IO implementation provides instant bidirectional communication between agents (users) and the central manager (admin) through WebSocket connections with automatic fallback to HTTP long-polling.
+The goal of this project is to implement the same monitoring scenario using **three different communication methods**:
 
-### Multi-Room Management System
-- **Room-based Organization**: Agents are organized into separate monitoring rooms
-- **Room Isolation**: Each room operates independently with its own set of users and administrator
-- **Scalable Architecture**: Support for multiple concurrent rooms with isolated communication channels
+1. **Real-Time (Socket.IO)**: Agents stream their CPU and memory metrics to an admin dashboard in real time within isolated rooms, supporting direct 1:1 chat and broadcast messages.
+2. **REST API (Express)**: Agents expose HTTP endpoints (`/system-info`, `/reboot-system`), and the Central Manager provides a web dashboard to query and view metrics on demand.
+3. **TCP / UDP Sockets (Node.js `net` & `dgram`)**: Agents run a TCP server to respond to admin commands and use UDP to send automatic alerts when system resources exceed a threshold, controlled via a terminal CLI.
 
-### User Features
-(Simplified setup without user authentication barriers)
+---
 
-#### Administrator Features:
-- **Individual User Communication**: Select and chat privately with specific users in the room
-- Send messages to all users in the room simultaneously
-- **Real-time User Monitoring**: 
-  - View online/offline status of all room members
-  - Monitor live system metrics (CPU, RAM, disk usage)
-  - Receive automated alerts when user system resources exceed 70% threshold
+## 🏗 Overview Diagram
 
-#### Normal User Features:
-- **Direct Admin Communication**: Send private messages to room administrator
-- **Room Broadcasting**: Send messages visible to all room members
+```mermaid
+flowchart TB
+    subgraph SharedCore["Shared Utilities"]
+        SYS["System Utilities<br/>CPU, RAM, Processes, Uptime"]
+        LOG["ANSI Logger"]
+        TYPES["Shared Types"]
+    end
 
-## Features in Node Socket version
+    subgraph Strategy1["1. Real-Time (Socket.IO)"]
+        RT_SERVER["Realtime Server"]
+        RT_ADMIN["Admin Web Dashboard"]
+        RT_AGENT["Agent"]
+        RT_AGENT <-->|"WebSocket"| RT_SERVER
+        RT_SERVER <-->|"Real-Time Events"| RT_ADMIN
+    end
 
-### Agent:
-- Connects to the central manager over TCP.
-- Monitors for events and sends alerts to the central manager.
-- Executes commands received from the central manager and sends back the results.
-- Handles chunked data and reconnects if the connection is lost.
+    subgraph Strategy2["2. REST API"]
+        REST_AGENT["REST Agent :3333"]
+        REST_DASH["Central Manager Web UI :8000"]
+        REST_DASH -->|"HTTP GET /system-info"| REST_AGENT
+    end
 
-### Central Manager:
-- Listens for agent connections over TCP.
-- Tracks active agents using their unique IDs.
-- Sends commands to specific agents.
-- Receives alerts and command execution results from agents.
-- Handles chunked data.
+    subgraph Strategy3["3. Raw Sockets (TCP/UDP)"]
+        SOCK_AGENT["Socket Agent (TCP Server)"]
+        SOCK_CM["Central Manager CLI"]
+        SOCK_CM <-->|"TCP: Commands and Data"| SOCK_AGENT
+        SOCK_AGENT -.->|"UDP: Threshold Alerts"| SOCK_CM
+    end
 
-## Prerequisites
-
-- **Node.js** (v14 or higher)
-- **NPM** (Node Package Manager)
-
-## How to Run the Socket.IO Real-time Version
-
-### 1. Clone the Repository
-Clone the project repository to your local machine or VMs.
-
-```bash
-git clone https://github.com/1mimhe/monitoring-app
-cd monitoring-app/Realtime
+    SharedCore --> Strategy1
+    SharedCore --> Strategy2
+    SharedCore --> Strategy3
 ```
 
-### 2. Install Dependencies
-Run the following command to install the required dependencies.
+---
+
+## ⚡ How Each Version Works
+
+### 1. Real-Time (`Realtime/`)
+- Uses **Socket.IO** and **Express**.
+- Agents join a designated room and stream their CPU and RAM load.
+- Admin joins the same room to see all connected agents, their live metrics, and can initiate 1:1 chat or broadcast messages.
+- State is managed via a dedicated `RoomManager` class to avoid global mutable state.
+
+### 2. REST API (`REST/`)
+- Uses **Express**.
+- Each agent runs a lightweight API exposing `GET /system-info` and `POST /reboot-system`.
+- The Central Manager provides a simple web dashboard where you enter the agent's IP and port to inspect its vitals and process list.
+
+### 3. TCP / UDP Sockets (`Socket/`)
+- Uses native Node.js `net` and `dgram` modules.
+- Agents listen for TCP connections and respond to commands (`info`, `reboot`), chunking large payloads (like process lists) so they fit into network packets without truncation.
+- Agents also listen in the background and send UDP alert messages if resource usage spikes above 70%.
+- Central Manager is an interactive command-line interface (CLI).
+
+---
+
+## 📁 Project Structure
+
+```
+monitoring-app/
+├── shared/                     # Shared system metric collection and logger
+│   ├── system.ts               # Non-blocking CPU, memory, uptime, process utilities
+│   ├── logger.ts               # Terminal logger
+│   └── types.ts                # Shared TypeScript types
+├── Realtime/                   # Socket.IO implementation
+│   ├── src/server/             # Express & Socket.IO server with RoomManager
+│   └── public/                 # Web UI (chat, admin, join screens)
+├── REST/                       # REST API implementation
+│   ├── Agent/                  # Express agent (:3333)
+│   └── Central-Manager/        # Web dashboard (:8000)
+├── Socket/                     # Native TCP/UDP implementation
+│   ├── Agent/                  # TCP daemon + UDP alert sender
+│   └── Central-Manager/        # Interactive CLI
+├── .env.example                # Sample environment variables
+├── tsconfig.base.json          # Shared TypeScript configuration
+└── LICENSE                     # MIT License
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- **Node.js** (v18 or higher)
+- **npm**
+
+### 1. Configure Environment Variables
+Copy `.env.example` into each subproject that requires configuration:
+```bash
+# Realtime
+cp .env.example Realtime/.env
+
+# REST Agent & Central-Manager
+cp .env.example REST/Agent/.env
+cp .env.example REST/Central-Manager/.env
+
+# Socket Agent & Central-Manager
+cp .env.example Socket/Agent/.env
+cp .env.example Socket/Central-Manager/.env
+```
+
+---
+
+### 2.1 Running the Realtime (Socket.IO) Version
 
 ```bash
+cd Realtime
 npm install
-```
-
-### 3. Configuration
-Set `PORT` environment variable.
-
-### 4. Starting the Server
-
-```bash
 npm run dev
 ```
 
-### 5. Accessing the Application
+- **Agent Panel**: Open `http://localhost:3000/` (enter your PC name and a Room ID).
+- **Admin Panel**: Open `http://localhost:3000/admin.html` (enter the same Room ID to monitor connected agents).
 
-#### For Regular Users (Agents):
-Open your web browser and navigate to:
-```
-localhost:PORT/
-```
-This opens the user panel where agents can join rooms and communicate with administrators.
+---
 
-#### For Administrators:
-Open your web browser and navigate to:
-```
-localhost:PORT/admin.html
-```
-This opens the administrative panel for room management and user monitoring.
+### 2.2 Running the REST Version
 
-## Setup Node Socket Version
-
-### 1. Clone the Repository
-Clone the project repository to your local machine or VMs.
-
+**Start the Agent:**
 ```bash
-git clone https://github.com/1mimhe/monitoring-app
-cd monitoring-app/Socket
-```
-
-### 2. Install Dependencies
-Run the following command in both the agent and central manager folders to install the required dependencies.
-
-```bash
+cd REST/Agent
 npm install
+npm run dev
+# Agent listens on http://localhost:3333
 ```
 
-### 3. Configuration
-Set the following environment variables:
+**Start the Dashboard:**
+```bash
+cd REST/Central-Manager
+npm install
+npm run dev
+# Dashboard opens on http://localhost:8000
+```
 
-In Central-Manager:
-- CENTRAL_MANAGER_UDP_ADDRESS
-- CENTRAL_MANAGER_UDP_PORT
-- AGENTS
+---
 
-In Agents:
-- AGENT_TCP_ADDRESS
-- AGENT_TCP_PORT
+### 2.3 Running the TCP/UDP Socket Version
 
+**Start the Agent:**
+```bash
+cd Socket/Agent
+npm install
+npm run dev
+```
 
-**Good Luck**
+**Start the Central Manager CLI:**
+```bash
+cd Socket/Central-Manager
+npm install
+npm run dev
+```
+
+---
+
+## 🧪 TypeScript Verification
+
+All subprojects can be type-checked with:
+
+```bash
+cd Realtime && npm run build
+cd ../REST/Agent && npm run build
+cd ../Central-Manager && npm run build
+cd ../../Socket/Agent && npm run build
+cd ../Central-Manager && npm run build
+```
