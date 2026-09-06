@@ -1,23 +1,27 @@
-import { Socket } from "socket.io";
-import { SystemInfo } from "../utils/system";
+import { Socket } from 'socket.io';
+import type { SystemInfo } from '../../../shared/types';
 
-type Callback = (error: { error?: string; success?: boolean; info?: SystemInfo }) => void;
+export type { SystemInfo };
+
+type Callback<T = Record<string, unknown>> = (
+  response: { error: string } | ({ success: true } & Partial<T>)
+) => void;
 
 export interface ServerToClientEvents {
-  message: (msg: string, type?: MessageTypes, sender?: string) => void;
-  error: (msg: string) => void;
-  info: (systemInfo: SystemInfo, sender: string) => void;
+  message:  (msg: string, type?: MessageTypes, sender?: string) => void;
+  error:    (msg: string) => void;
+  info:     (systemInfo: SystemInfo, sender: string) => void;
   userList: (userList: string[]) => void;
-  join: (newUser: { pcName: string; room: string }) => void;
-  dis: (pcName: string) => void;
+  join:     (newUser: { pcName: string; room: string }) => void;
+  dis:      (pcName: string) => void;
 }
 
 export interface ClientToServerEvents {
-  join: (user: { pcName: string; room: string; role: string }, callback: Callback) => void;
-  message: (msg: string, callback: Callback) => void;
-  broadcast: (msg: string, callback: Callback) => void;
+  join:       (user: { pcName: string; room: string; role: Roles }, callback: Callback) => void;
+  message:    (msg: string, callback: Callback) => void;
+  broadcast:  (msg: string, callback: Callback) => void;
   selectChat: (selectedPcName: string, callback: Callback) => void;
-  closeChat: (callback: Callback) => void;
+  closeChat:  (callback: Callback) => void;
 }
 
 export interface InterServerEvents {
@@ -25,28 +29,28 @@ export interface InterServerEvents {
 }
 
 export interface SocketData {
-  pcName: string;
-  room: string;
-  role: string;
-  infoInterval: NodeJS.Timeout
+  pcName:       string;
+  room:         string;
+  role:         Roles;
+  infoInterval: NodeJS.Timeout | undefined;
 }
 
 export type SocketType = Socket<
-    ClientToServerEvents,
-    ServerToClientEvents,
-    InterServerEvents,
-    SocketData
+  ClientToServerEvents,
+  ServerToClientEvents,
+  InterServerEvents,
+  SocketData
 >;
 
 export enum MessageTypes {
-  Normal = 'normal',
+  Normal    = 'normal',
   Broadcast = 'broadcast',
   OtherSide = 'other',
-  System = 'system',
-  Warning = 'warning'
+  System    = 'system',
+  Warning   = 'warning',
 }
 
 export enum Roles {
   Admin = 'admin',
-  User = 'user'
+  User  = 'user',
 }

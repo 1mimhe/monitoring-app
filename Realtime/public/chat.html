@@ -1,37 +1,98 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-    <title>Monitoring App Chat</title>
-    <link rel="stylesheet" href="/css/styles.css" />
-  </head>
-  <body>
-    <div id="popup"></div>
-    <header id="chat-header">
-      <div class="header-section">
-        <h2 id="room-name"></h2>
-        <p id="pc-name"></p>
-      </div>
-      <p id="current-time"></p>
-    </header>
-    <div class="main-container">
-      <div class="content-area">
-        <ul id="messages"></ul>
-        <form id="form" action="">
-          <input id="input" autocomplete="off" />
-          <button id="send">Send to Admin</button>
-          <button id="broadcast">Broadcast</button>
-          <button id="close-chat" hidden onclick="closeChatWithAnimation()">Close Chat</button>
-        </form>
-      </div>
-      <div id="sidebar" hidden>
-        <br/>
-        <h3>Systems</h3>
-        <ul id="system-list"></ul>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Real-time system monitoring and communication." />
+  <title>Monitoring App — Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body class="chat-page">
+
+  <!-- Toast notification -->
+  <div id="toast" role="alert" aria-live="polite"></div>
+
+  <!-- Header -->
+  <header class="chat-header">
+    <div class="chat-header__left">
+      <div class="chat-logo">📡</div>
+      <div class="chat-header__info">
+        <h2 id="room-name" class="chat-room-name"></h2>
+        <p  id="pc-name"   class="chat-pc-name"></p>
       </div>
     </div>
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qs/6.6.0/qs.min.js"></script>
-    <script src="/js/chat.js"></script>
-  </body>
+    <div class="chat-header__right">
+      <div class="connection-indicator" id="connection-indicator">
+        <span class="connection-dot"></span>
+        <span class="connection-label" id="connection-label">Connecting…</span>
+      </div>
+      <time class="chat-time" id="current-time"></time>
+    </div>
+  </header>
+
+  <!-- Main layout -->
+  <div class="chat-layout">
+
+    <!-- Message area -->
+    <div class="chat-main">
+      <!-- Admin-only chat status bar -->
+      <div class="chat-status-bar" id="chat-status-bar" hidden>
+        <span id="chat-status-text">No chat selected — use broadcast or select a user</span>
+        <button class="close-chat-btn" id="close-chat-btn" hidden>✕ Close chat</button>
+      </div>
+
+      <ul id="messages" class="messages-list" aria-label="Messages"></ul>
+
+      <!-- Input form -->
+      <form id="message-form" class="message-form">
+        <input
+          id="message-input"
+          class="message-input"
+          type="text"
+          placeholder="Type a message…"
+          autocomplete="off"
+          aria-label="Message input"
+        />
+        <button type="submit" id="send-btn" class="send-btn" aria-label="Send message">
+          <svg viewBox="0 0 20 20" fill="none" width="18" height="18" aria-hidden="true">
+            <path d="M2 10L18 2L14 18L10 10L2 10Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button type="button" id="broadcast-btn" class="broadcast-btn" aria-label="Broadcast message">
+          <svg viewBox="0 0 20 20" fill="none" width="18" height="18" aria-hidden="true">
+            <circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M5 10a5 5 0 0110 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M2 10a8 8 0 0116 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </form>
+    </div>
+
+    <!-- Sidebar (admin only) -->
+    <aside id="sidebar" class="sidebar" hidden aria-label="Connected agents">
+      <div class="sidebar-header">
+        <h3 class="sidebar-title">Agents</h3>
+        <span class="agent-count" id="agent-count">0 online</span>
+      </div>
+      <ul id="system-list" class="system-list"></ul>
+    </aside>
+  </div>
+
+  <!-- System info modal -->
+  <div id="sysinfo-overlay" class="modal-overlay" hidden aria-modal="true" role="dialog">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="sysinfo-title">System Information</h2>
+        <button class="modal-close" id="sysinfo-close" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body" id="sysinfo-body"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qs/6.6.0/qs.min.js"></script>
+  <script src="/js/chat.js"></script>
+</body>
 </html>

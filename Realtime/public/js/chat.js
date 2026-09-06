@@ -1,649 +1,499 @@
+/**
+ * Monitoring App — Realtime Client Dashboard Controller
+ * Handles Socket.IO communication, room participation, agent metrics rendering,
+ * direct messaging, broadcasts, and system information modals.
+ */
+
+// ── Query Params & State Initialization ───────────────────────────────────────
+const { pcName, room, role } = Qs.parse(location.search, { ignoreQueryPrefix: true });
+
+if (!pcName || !room || !role) {
+  location.href = '/';
+}
+
+/** Map storing connected agent state: pcName -> { online: boolean, info?: SystemInfo } */
+const systems = new Map();
+let selectedChat = null; // Admin-only: pcName of targeted agent for 1:1 chat
+
+// ── DOM Elements ─────────────────────────────────────────────────────────────
+const $roomName        = document.getElementById('room-name');
+const $pcName          = document.getElementById('pc-name');
+const $currentTime     = document.getElementById('current-time');
+const $connIndicator   = document.getElementById('connection-indicator');
+const $connLabel       = document.getElementById('connection-label');
+const $toast           = document.getElementById('toast');
+
+const $statusBar       = document.getElementById('chat-status-bar');
+const $statusText      = document.getElementById('chat-status-text');
+const $closeChatBtn    = document.getElementById('close-chat-btn');
+
+const $messagesList    = document.getElementById('messages');
+const $messageForm     = document.getElementById('message-form');
+const $messageInput    = document.getElementById('message-input');
+const $sendBtn         = document.getElementById('send-btn');
+const $broadcastBtn    = document.getElementById('broadcast-btn');
+
+const $sidebar         = document.getElementById('sidebar');
+const $agentCount      = document.getElementById('agent-count');
+const $systemList      = document.getElementById('system-list');
+
+const $sysinfoOverlay  = document.getElementById('sysinfo-overlay');
+const $sysinfoTitle    = document.getElementById('sysinfo-title');
+const $sysinfoBody     = document.getElementById('sysinfo-body');
+const $sysinfoClose    = document.getElementById('sysinfo-close');
+
+// ── Header Setup ─────────────────────────────────────────────────────────────
+$roomName.textContent = `Room: ${room}`;
+$pcName.textContent   = `${role === 'admin' ? '👑 Admin' : '💻 Agent'}: ${pcName}`;
+
+function updateClock() {
+  const now = new Date();
+  $currentTime.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Socket Initialization ────────────────────────────────────────────────────
 const socket = io({
   ackTimeout: 10000,
   retries: 3
 });
 
-const systems = new Map();
-const { pcName, room, role } = Qs.parse(location.search, { ignoreQueryPrefix: true });
-let selectedChat = null; // For admin to track selected chat
-
-// Header updates
-document.getElementById('room-name').textContent = `Room: ${room}`;
-document.getElementById('pc-name').textContent = `PC: ${pcName}`;
-
-function updateTime() {
-  const now = new Date();
-  document.getElementById('current-time').textContent = now.toLocaleTimeString();
-}
-setInterval(updateTime, 1000);
-updateTime();
-
-// Selectors
-const $input = document.getElementById('input');
-const $messages = document.getElementById('messages');
-const $sendButton = document.getElementById('send');
-const $broadcastButton = document.getElementById('broadcast');
-const $popup = document.getElementById('popup');
-const $sidebar = document.getElementById('sidebar');
-const $systemList = document.getElementById('system-list');
-const $closeChatButton = document.getElementById('close-chat');
-
-function scrollToBottom() {
-  $messages.scrollTop = $messages.scrollHeight;
+// ── Toast Notifications ──────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(message, type = 'info') {
+  if (toastTimer) clearTimeout(toastTimer);
+  $toast.textContent = message;
+  $toast.className = `show toast-${type}`;
+  toastTimer = setTimeout(() => {
+    $toast.className = '';
+  }, 3500);
 }
 
-function addMessage(msg, type = 'normal', sender = 'You') {
-  const item = document.createElement('li');
-  item.classList.add(`message-${type}`);
-
-  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-  const messageText = document.createElement('div');
-  messageText.textContent = msg;
-  messageText.style.marginBottom = '0.25rem';
-
-  const metaInfo = document.createElement('div');
-  metaInfo.textContent = `${sender} • ${time}`;
-  metaInfo.style.textAlign = 'right';
-  metaInfo.style.fontSize = '0.75rem';
-  metaInfo.style.color = '#888';
-
-  item.appendChild(messageText);
-  item.appendChild(metaInfo);
-
-  $messages.appendChild(item);
-  scrollToBottom();
-}
-
-function updateChatStatus() {
-  if (role === 'admin') {
-    const statusDiv = document.getElementById('chat-status') || createChatStatusDiv();
-    if (selectedChat) {
-      statusDiv.textContent = `Chatting with: ${selectedChat}`;
-      statusDiv.style.color = '#4caf50';
-      $sendButton.textContent = `Send to ${selectedChat}`;
-      $sendButton.removeAttribute('disabled');
-      $closeChatButton.style.display = 'inline-block';
-      addSelectionFeedback(selectedChat, 'select');
-    } else {
-      statusDiv.textContent = 'No chat selected - Broadcast mode';
-      statusDiv.style.color = '#ff9800';
-      $sendButton.textContent = 'Send';
-      $sendButton.setAttribute('disabled', 'disabled');
-      $closeChatButton.style.display = 'none';
-      addSelectionFeedback(null, 'close');
-    }
-  }
-}
-
-function createChatStatusDiv() {
-  const statusDiv = document.createElement('div');
-  statusDiv.id = 'chat-status';
-  statusDiv.style.cssText = `
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    padding: 8px 12px;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    border-radius: 4px;
-    font-size: 12px;
-    z-index: 1001;
-  `;
-  document.body.appendChild(statusDiv);
-  return statusDiv;
-}
-
-document.getElementById('form').addEventListener('submit', (e) => {
-  e.preventDefault();
-  if ($input.value.trim()) {
-    if (role === 'admin' && !selectedChat) {
-      showPopup('Please select a user to chat with or use broadcast', 'error');
-      return;
-    }
-    sendMessage();
-  }
-});
-
-$sendButton.addEventListener('click', (e) => {
-  e.preventDefault();
-  if ($input.value.trim()) {
-    if (role === 'admin' && !selectedChat) {
-      showPopup('Please select a user to chat with or use broadcast', 'error');
-      return;
-    }
-    sendMessage();
-  }
-});
-
-$broadcastButton.addEventListener('click', (e) => {
-  e.preventDefault();
-  if ($input.value.trim()) {
-    sendBroadcast();
-  }
-});
-
-if ($closeChatButton) {
-  $closeChatButton.addEventListener('click', (e) => {
-    e.preventDefault();
-    closeChat();
-  });
-}
-
-function sendMessage() {
-  if ($sendButton.hasAttribute('disabled')) return;
-
-  $sendButton.setAttribute('disabled', 'disabled');
-  const message = $input.value.trim();
-
-  if (message) {
-    socket.emit('message', message, () => {
-      $sendButton.removeAttribute('disabled');
-      $input.value = '';
-      $input.focus();
-    });
+// ── Connection State Handling ────────────────────────────────────────────────
+function setConnectionState(connected, label) {
+  if (connected) {
+    $connIndicator.classList.add('connected');
+    $connIndicator.classList.remove('disconnected');
+    $connLabel.textContent = label || 'Connected';
   } else {
-    $sendButton.removeAttribute('disabled');
+    $connIndicator.classList.remove('connected');
+    $connIndicator.classList.add('disconnected');
+    $connLabel.textContent = label || 'Disconnected';
   }
 }
 
-function sendBroadcast() {
-  if ($broadcastButton.hasAttribute('disabled')) return;
-
-  $broadcastButton.setAttribute('disabled', 'disabled');
-  const message = $input.value.trim();
-
-  if (message) {
-    socket.emit('broadcast', message, () => {
-      setTimeout(() => {
-        $broadcastButton.removeAttribute('disabled');
-      }, 10000);
-      $input.value = '';
-      $input.focus();
-    });
-  } else {
-    $broadcastButton.removeAttribute('disabled');
-  }
-}
-
-// Socket connection
-socket.emit('join', { pcName, room, role }, (response) => {
-  if (response?.error) {
-    alert(response.error);
-    location.href = '/';
-  }
-});
-
-// Socket Event Listeners
-socket.on('join', ({ pcName: joinedPcName, room: joinedRoom }) => {
-  systems.set(joinedPcName, { online: true });
-  renderSystems();
-});
-
-socket.on('userList', (users) => {
-  users.forEach(user => {
-    systems.set(user, { online: true });
-  });
-  renderSystems();
-});
-
-socket.on('message', (msg, type = 'normal', sender = 'You') => {
-  addMessage(msg, type, sender);
-});
-
-socket.on('error', (msg) => {
-  showPopup(msg, 'error');
-});
-
-socket.on('info', (info, pcName) => {
-  const existingData = systems.get(pcName) || {};
-  systems.set(pcName, { ...existingData, info, online: true });
-  renderSystems();
-});
-
-socket.on('dis', (pcName) => {
-  console.log('System disconnected:', pcName);
-  if (systems.has(pcName)) {
-    const data = systems.get(pcName);
-    systems.set(pcName, { ...data, online: false });
-    renderSystems();
-
-    if (role === 'admin' && selectedChat === pcName) {
-      selectedChat = null;
-      updateChatStatus();
-    }
-  }
-});
-
-function showPopup(message, type = 'error') {
-  $popup.textContent = message;
-  $popup.className = 'show';
-
-  if (type === 'error') {
-    $popup.style.background = '#f44336';
-  } else if (type === 'success') {
-    $popup.style.background = '#4caf50';
-  } else if (type === 'info') {
-    $popup.style.background = '#2196f3';
-  }
-
-  setTimeout(() => {
-    $popup.classList.remove('show');
-  }, 3000);
-}
-
-function createSystemInfoPopup() {
-  const overlay = document.createElement('div');
-  overlay.id = 'system-info-overlay';
-  overlay.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 2000;
-    display: none;
-  `;
-
-  const popup = document.createElement('div');
-  popup.id = 'system-info-popup';
-  popup.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #2c3e50;
-    color: white;
-    border-radius: 8px;
-    padding: 20px;
-    max-width: 600px;
-    max-height: 80vh;
-    overflow-y: auto;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    z-index: 2001;
-  `;
-
-  const header = document.createElement('div');
-  header.style.cssText = `
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #34495e;
-    padding-bottom: 10px;
-    margin-bottom: 20px;
-  `;
-
-  const title = document.createElement('h2');
-  title.style.cssText = 'margin: 0; color: #00bcd4;';
-  title.textContent = 'System Information';
-
-  const closeButton = document.createElement('button');
-  closeButton.innerHTML = '×';
-  closeButton.style.cssText = `
-    background: none;
-    border: none;
-    color: #e74c3c;
-    font-size: 24px;
-    cursor: pointer;
-    padding: 0;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  `;
-
-  const content = document.createElement('div');
-  content.id = 'system-info-content';
-
-  header.appendChild(title);
-  header.appendChild(closeButton);
-  popup.appendChild(header);
-  popup.appendChild(content);
-  overlay.appendChild(popup);
-  document.body.appendChild(overlay);
-
-  closeButton.addEventListener('click', () => {
-    overlay.style.display = 'none';
-  });
-
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) {
-      overlay.style.display = 'none';
-    }
-  });
-
-  return overlay;
-}
-
-function showSystemInfo(pcName) {
-  let overlay = document.getElementById('system-info-overlay');
-  if (!overlay) {
-    overlay = createSystemInfoPopup();
-  }
-
-  const content = document.getElementById('system-info-content');
-  const title = overlay.querySelector('h2');
-  title.textContent = `System Information - ${pcName}`;
-
-  content.innerHTML = '';
-
-  const { info } = systems.get(pcName);
-  if (!info) {
-    content.innerHTML = '<p style="color: #e74c3c;">No system information available</p>';
-    overlay.style.display = 'block';
-    return;
-  }
-
-  const sections = [
-    {
-      title: 'Operating System',
-      data: info.os,
-      formatter: (os) => ({
-        'Hostname': os.hostname,
-        'Platform': os.platform,
-        'Architecture': os.architecture,
-        'Release': os.release,
-        'Type': os.type,
-        'Uptime': os.uptime
-      })
-    },
-    {
-      title: 'CPU Information',
-      data: info.cpu,
-      formatter: (cpu) => ({
-        'CPU Usage': `${cpu.usedCpu.toFixed(2)}%`,
-        'Free CPU': `${cpu.freeCpu.toFixed(2)}%`,
-        'Cores': cpu.cores.length,
-        'Model': cpu.cores[0].model
-      })
-    },
-    {
-      title: 'Memory Information',
-      data: info.memory,
-      formatter: (memory) => ({
-        'Total Memory': memory.totalMemory,
-        'Used Memory': memory.usedMemory,
-        'Free Memory': memory.freeMemory,
-        'Usage Percentage': `${memory.memoryUsagePercentage.toFixed(2)}%`
-      })
-    },
-    {
-      title: 'Network Interfaces',
-      data: info.networkInterfaces,
-      formatter: (interfaces) => {
-        const result = {};
-        Object.keys(interfaces).forEach(name => {
-          const iface = interfaces[name];
-          result[name] = iface.map(i => `${i.family}: ${i.address}`).join('\n');
-        });
-        return result;
-      }
-    }
-  ];
-
-  sections.forEach(section => {
-    if (section.data) {
-      const sectionDiv = document.createElement('div');
-      sectionDiv.style.cssText = 'margin-bottom: 25px;';
-
-      const sectionTitle = document.createElement('h3');
-      sectionTitle.textContent = section.title;
-      sectionTitle.style.cssText = `
-        color: #00bcd4;
-        margin-bottom: 10px;
-        border-bottom: 1px solid #34495e;
-        padding-bottom: 5px;
-      `;
-
-      const sectionContent = document.createElement('div');
-      sectionContent.style.cssText = 'margin-left: 10px;';
-
-      const formattedData = section.formatter(section.data);
-      Object.keys(formattedData).forEach(key => {
-        const item = document.createElement('div');
-        item.style.cssText = 'margin-bottom: 8px;';
-
-        const label = document.createElement('strong');
-        label.textContent = `${key}: `;
-        label.style.color = '#ecf0f1';
-
-        const value = document.createElement('span');
-        value.textContent = formattedData[key];
-        value.style.color = '#bdc3c7';
-
-        item.appendChild(label);
-        item.appendChild(value);
-        sectionContent.appendChild(item);
-      });
-
-      sectionDiv.appendChild(sectionTitle);
-      sectionDiv.appendChild(sectionContent);
-      content.appendChild(sectionDiv);
-    }
-  });
-
-  overlay.style.display = 'block';
-}
-
-function renderSystems() {
-  $systemList.innerHTML = '';
-
-  if (systems.size === 0) {
-    const emptyItem = document.createElement('li');
-    emptyItem.textContent = 'No systems connected.';
-    emptyItem.style.color = '#666';
-    emptyItem.style.fontStyle = 'italic';
-    $systemList.appendChild(emptyItem);
-    return;
-  }
-
-  systems.forEach((data, pc) => {
-    const li = document.createElement('li');
-    li.classList.add('system-item');
-    li.style.cssText = 'display: flex; flex-direction: column; padding: 0.75rem 0.5rem; cursor: pointer; border-bottom: 1px solid #34495e; transition: all 0.3s; position: relative;';
-
-    const selectionLine = document.createElement('div');
-    selectionLine.classList.add('selection-line');
-    li.appendChild(selectionLine);
-
-    const selectionBorder = document.createElement('div');
-    selectionBorder.classList.add('selection-border');
-    li.appendChild(selectionBorder);
-
-    const mainRow = document.createElement('div');
-    mainRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 2;';
-
-    const leftSection = document.createElement('div');
-    leftSection.style.cssText = 'display: flex; align-items: center;';
-
-    const indicator = document.createElement('span');
-    indicator.textContent = data.online ? '●' : '○';
-    indicator.style.color = data.online ? '#4caf50' : '#f44336';
-    indicator.style.marginRight = '0.5rem';
-
-    const pcName = document.createElement('span');
-    pcName.textContent = pc;
-    pcName.classList.add('system-name');
-
-    if (role === 'admin' && selectedChat === pc) {
-      li.classList.add('selected', 'active-chat');
-      pcName.style.fontWeight = 'bold';
-      pcName.style.color = '#00bcd4';
-    }
-
-    leftSection.appendChild(indicator);
-    leftSection.appendChild(pcName);
-    mainRow.appendChild(leftSection);
-
-    if (role === 'admin' && data.online) {
-      const buttonsSection = document.createElement('div');
-      buttonsSection.style.cssText = 'display: flex; gap: 0.25rem; margin-top: 0.5rem; position: relative; z-index: 2;';
-
-      const chatButton = document.createElement('button');
-      chatButton.textContent = selectedChat === pc ? 'Selected' : 'Chat';
-      chatButton.style.cssText = `
-        padding: 0.25rem 0.5rem;
-        font-size: 0.75rem;
-        border: none;
-        border-radius: 3px;
-        cursor: pointer;
-        background: ${selectedChat === pc ? '#4caf50' : '#00bcd4'};
-        color: white;
-        transition: background 0.3s;
-      `;
-
-      if (selectedChat !== pc) {
-        chatButton.addEventListener('click', (e) => {
-          e.stopPropagation();
-          selectChat(pc);
-        });
-      } else {
-        chatButton.disabled = true;
-      }
-
-      const infoButton = document.createElement('button');
-      infoButton.textContent = 'Info';
-      infoButton.style.cssText = `
-        padding: 0.25rem 0.5rem;
-        font-size: 0.75rem;
-        border: none;
-        border-radius: 3px;
-        cursor: pointer;
-        background: #666;
-        color: white;
-        transition: background 0.3s;
-      `;
-
-      infoButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showSystemInfo(pc);
-      });
-
-      buttonsSection.appendChild(chatButton);
-      buttonsSection.appendChild(infoButton);
-
-      li.appendChild(mainRow);
-      li.appendChild(buttonsSection);
-    } else {
-      li.appendChild(mainRow);
-    }
-
-    if (!data.online) {
-      li.classList.add('offline');
-      li.style.opacity = '0.6';
-    }
-
-    li.addEventListener('mouseenter', () => {
-      if (data.online && selectedChat !== pc) {
-        li.style.backgroundColor = '#34495e';
-      }
-    });
-
-    li.addEventListener('mouseleave', () => {
-      if (selectedChat !== pc) {
-        li.style.backgroundColor = 'transparent';
-      }
-    });
-
-    $systemList.appendChild(li);
-  });
-}
-
-function selectChat(pcName) {
-  if (role !== 'admin') return;
-
-  const allItems = document.querySelectorAll('.system-item');
-  allItems.forEach(item => {
-    item.classList.remove('selected', 'active-chat');
-  });
-
-  socket.emit('selectChat', pcName, () => {
-    selectedChat = pcName;
-    updateChatStatus();
-
-    renderSystems();
-      const selectedItem = Array.from(document.querySelectorAll('.system-item')).find(item => {
-      const nameSpan = item.querySelector('.system-name');
-      return nameSpan && nameSpan.textContent === pcName;
-    });
-
-    if (selectedItem) {
-      selectedItem.classList.add('selected', 'active-chat');
-    }
-  });
-}
-
-function closeChat() {
-  if (role !== 'admin') return;
-
-  const currentSelectedItem = document.querySelector('.system-item.selected');
-  
-  socket.emit('closeChat', () => {
-    selectedChat = null;
-    updateChatStatus();
-    
-    if (currentSelectedItem) {
-      currentSelectedItem.style.transition = 'all 0.3s ease';
-      currentSelectedItem.classList.remove('selected', 'active-chat');
-      renderSystems();
-    } else {
-      renderSystems();
-    }
-  });
-}
-
-function addSelectionFeedback(pcName, action = 'select') {
-  const statusDiv = document.getElementById('chat-status') || createChatStatusDiv();
-  
-  if (action === 'select') {
-    statusDiv.style.transform = 'scale(1.05)';
-    statusDiv.style.background = 'rgba(76, 175, 80, 0.9)';
-    
-    setTimeout(() => {
-      statusDiv.style.transform = 'scale(1)';
-      statusDiv.style.background = 'rgba(0,0,0,0.8)';
-    }, 200);
-  } else if (action === 'close') {
-    statusDiv.style.transform = 'scale(0.95)';
-    statusDiv.style.background = 'rgba(244, 67, 54, 0.9)';
-    
-    setTimeout(() => {
-      statusDiv.style.transform = 'scale(1)';
-      statusDiv.style.background = 'rgba(0,0,0,0.8)';
-    }, 200);
-  }
-}
-
-if (role === 'admin') {
-  $sidebar.classList.remove('hidden');
-  $sidebar.classList.add('show');
-  $closeChatButton.classList.remove('hidden');
-  $closeChatButton.classList.add('show');
-  updateChatStatus();
-} else {
-  $sidebar.classList.add('hidden');
-  $sidebar.classList.remove('show');
-  $sendButton.removeAttribute('disabled');
-}
-
-window.addEventListener('load', () => {
-  $input.focus();
-});
-
-// Handle connection status
 socket.on('connect', () => {
-  console.log('Connected to server.');
-  showPopup('Connected to server.', 'success');
+  setConnectionState(true, 'Connected');
+  showToast('Connected to monitoring server', 'success');
+
+  // Join designated room
+  socket.emit('join', { pcName, room, role }, (response) => {
+    if (response?.error) {
+      showToast(response.error, 'error');
+      setTimeout(() => { location.href = '/'; }, 2000);
+    }
+  });
 });
 
 socket.on('disconnect', () => {
-  console.log('Disconnected from server.');
-  showPopup('Disconnected from server.', 'error');
+  setConnectionState(false, 'Disconnected');
+  showToast('Disconnected from server. Reconnecting…', 'error');
 });
 
-socket.on('reconnect', () => {
-  console.log('Reconnected to server.');
-  showPopup('Reconnected to server.', 'success');
+socket.io.on('reconnect', () => {
+  setConnectionState(true, 'Connected');
+  showToast('Reconnected to monitoring server', 'success');
+});
+
+// ── Chat Messages ────────────────────────────────────────────────────────────
+function scrollToBottom() {
+  $messagesList.scrollTop = $messagesList.scrollHeight;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function renderMessage(msg, type = 'normal', sender = 'System') {
+  const li = document.createElement('li');
+  const isSelf = sender === 'You' || sender === pcName;
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // Map backend message types to CSS modifier classes
+  let modifier = 'other';
+  if (isSelf) modifier = 'self';
+  else if (type === 'system') modifier = 'system';
+  else if (type === 'broadcast') modifier = 'broadcast';
+  else if (type === 'warning') modifier = 'warning';
+
+  li.className = `msg msg--${modifier}`;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg__bubble';
+  bubble.textContent = msg;
+  li.appendChild(bubble);
+
+  if (type !== 'system') {
+    const meta = document.createElement('div');
+    meta.className = 'msg__meta';
+    meta.textContent = `${sender} • ${time}`;
+    li.appendChild(meta);
+  }
+
+  $messagesList.appendChild(li);
+  scrollToBottom();
+}
+
+// ── Admin Chat Status Bar ────────────────────────────────────────────────────
+function updateAdminChatStatus() {
+  if (role !== 'admin') return;
+
+  if (selectedChat) {
+    $statusBar.classList.remove('no-selection');
+    $statusText.textContent = `Direct communication with: ${selectedChat}`;
+    $closeChatBtn.removeAttribute('hidden');
+    $sendBtn.removeAttribute('disabled');
+  } else {
+    $statusBar.classList.add('no-selection');
+    $statusText.textContent = 'No agent selected — Use Broadcast or select an agent from sidebar';
+    $closeChatBtn.setAttribute('hidden', '');
+    $sendBtn.setAttribute('disabled', 'disabled');
+  }
+}
+
+// ── Messaging Actions ────────────────────────────────────────────────────────
+function handleSendMessage() {
+  const text = $messageInput.value.trim();
+  if (!text) return;
+
+  if (role === 'admin' && !selectedChat) {
+    showToast('Select an agent from the sidebar or click Broadcast', 'info');
+    return;
+  }
+
+  $sendBtn.disabled = true;
+  socket.emit('message', text, (response) => {
+    $sendBtn.disabled = false;
+    if (response?.error) {
+      showToast(response.error, 'error');
+      return;
+    }
+    $messageInput.value = '';
+    $messageInput.focus();
+  });
+}
+
+function handleSendBroadcast() {
+  const text = $messageInput.value.trim();
+  if (!text) {
+    showToast('Type a message to broadcast to all agents', 'info');
+    return;
+  }
+
+  $broadcastBtn.disabled = true;
+  socket.emit('broadcast', text, (response) => {
+    if (response?.error) {
+      showToast(response.error, 'error');
+      $broadcastBtn.disabled = false;
+      return;
+    }
+    $messageInput.value = '';
+    $messageInput.focus();
+    // Rate-limit broadcast feedback
+    setTimeout(() => {
+      $broadcastBtn.disabled = false;
+    }, 3000);
+  });
+}
+
+$messageForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  handleSendMessage();
+});
+
+$broadcastBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  handleSendBroadcast();
+});
+
+$closeChatBtn.addEventListener('click', () => {
+  if (role !== 'admin') return;
+  socket.emit('closeChat', () => {
+    selectedChat = null;
+    updateAdminChatStatus();
+    renderSidebar();
+  });
+});
+
+// ── Socket Incoming Events ───────────────────────────────────────────────────
+socket.on('message', (msg, type = 'normal', sender = 'System') => {
+  renderMessage(msg, type, sender);
+});
+
+socket.on('error', (msg) => {
+  showToast(msg, 'error');
+});
+
+socket.on('join', ({ pcName: joinedPc }) => {
+  if (joinedPc !== pcName) {
+    systems.set(joinedPc, { online: true });
+    renderSidebar();
+  }
+});
+
+socket.on('userList', (users) => {
+  users.forEach((user) => {
+    if (user !== pcName) {
+      const existing = systems.get(user) || {};
+      systems.set(user, { ...existing, online: true });
+    }
+  });
+  renderSidebar();
+});
+
+socket.on('info', (info, senderPc) => {
+  const existing = systems.get(senderPc) || {};
+  systems.set(senderPc, { ...existing, info, online: true });
+  renderSidebar();
+
+  // If modal is currently inspecting this PC, update live data
+  if (!$sysinfoOverlay.hasAttribute('hidden') && $sysinfoOverlay.dataset.pcName === senderPc) {
+    populateSystemInfo(senderPc, info);
+  }
+});
+
+socket.on('dis', (disconnectedPc) => {
+  if (systems.has(disconnectedPc)) {
+    const existing = systems.get(disconnectedPc);
+    systems.set(disconnectedPc, { ...existing, online: false });
+    if (selectedChat === disconnectedPc) {
+      selectedChat = null;
+      updateAdminChatStatus();
+      showToast(`Agent ${disconnectedPc} disconnected`, 'error');
+    }
+    renderSidebar();
+  }
+});
+
+// ── Sidebar & Agent List Rendering ───────────────────────────────────────────
+function renderSidebar() {
+  if (role !== 'admin') return;
+
+  $systemList.innerHTML = '';
+  let onlineCount = 0;
+
+  systems.forEach((data, name) => {
+    if (data.online) onlineCount++;
+
+    const item = document.createElement('li');
+    item.className = `agent-item ${data.online ? '' : 'offline'} ${selectedChat === name ? 'selected' : ''}`;
+
+    // Agent Header (Status Dot + Name)
+    const header = document.createElement('div');
+    header.className = 'agent-item__header';
+
+    const dot = document.createElement('span');
+    dot.className = `agent-status-dot ${data.online ? 'online' : 'offline'}`;
+
+    const label = document.createElement('span');
+    label.className = 'agent-name';
+    label.textContent = name;
+
+    header.appendChild(dot);
+    header.appendChild(label);
+    item.appendChild(header);
+
+    // Mini metric bars if metrics available
+    if (data.info && data.online) {
+      const metricsDiv = document.createElement('div');
+      metricsDiv.className = 'agent-metrics';
+
+      // CPU Row
+      const cpuUsage = data.info.cpu?.usedCpu ?? 0;
+      const cpuClass = cpuUsage > 80 ? 'danger' : cpuUsage > 50 ? 'warn' : '';
+      const cpuRow = document.createElement('div');
+      cpuRow.className = 'agent-metric-row';
+      cpuRow.innerHTML = `
+        <span>CPU</span>
+        <div class="mini-bar-track">
+          <div class="mini-bar-fill ${cpuClass}" style="width: ${Math.min(100, cpuUsage).toFixed(0)}%"></div>
+        </div>
+        <span>${cpuUsage.toFixed(0)}%</span>
+      `;
+
+      // RAM Row
+      const memUsage = data.info.memory?.memoryUsagePercentage ?? 0;
+      const memClass = memUsage > 85 ? 'danger' : memUsage > 65 ? 'warn' : '';
+      const memRow = document.createElement('div');
+      memRow.className = 'agent-metric-row';
+      memRow.innerHTML = `
+        <span>RAM</span>
+        <div class="mini-bar-track">
+          <div class="mini-bar-fill ${memClass}" style="width: ${Math.min(100, memUsage).toFixed(0)}%"></div>
+        </div>
+        <span>${memUsage.toFixed(0)}%</span>
+      `;
+
+      metricsDiv.appendChild(cpuRow);
+      metricsDiv.appendChild(memRow);
+      item.appendChild(metricsDiv);
+    }
+
+    // Action buttons (Chat & Info)
+    const actions = document.createElement('div');
+    actions.className = 'agent-actions';
+
+    const chatBtn = document.createElement('button');
+    chatBtn.className = `agent-action-btn chat-btn ${selectedChat === name ? 'active' : ''}`;
+    chatBtn.textContent = selectedChat === name ? 'Active' : 'Chat';
+    chatBtn.disabled = !data.online;
+    chatBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectAgent(name);
+    });
+
+    const infoBtn = document.createElement('button');
+    infoBtn.className = 'agent-action-btn info-btn';
+    infoBtn.textContent = 'Metrics';
+    infoBtn.disabled = !data.online || !data.info;
+    infoBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSystemModal(name);
+    });
+
+    actions.appendChild(chatBtn);
+    actions.appendChild(infoBtn);
+    item.appendChild(actions);
+
+    $systemList.appendChild(item);
+  });
+
+  $agentCount.textContent = `${onlineCount} online`;
+}
+
+function selectAgent(name) {
+  if (role !== 'admin') return;
+
+  socket.emit('selectChat', name, () => {
+    selectedChat = name;
+    updateAdminChatStatus();
+    renderSidebar();
+    showToast(`Direct chat established with ${name}`, 'info');
+  });
+}
+
+// ── System Info Modal ────────────────────────────────────────────────────────
+function openSystemModal(name) {
+  const agent = systems.get(name);
+  if (!agent || !agent.info) {
+    showToast(`No telemetry data available for ${name}`, 'error');
+    return;
+  }
+
+  $sysinfoTitle.textContent = `Telemetry Diagnostics — ${name}`;
+  $sysinfoOverlay.dataset.pcName = name;
+  populateSystemInfo(name, agent.info);
+  $sysinfoOverlay.removeAttribute('hidden');
+}
+
+function closeSystemModal() {
+  $sysinfoOverlay.setAttribute('hidden', '');
+  delete $sysinfoOverlay.dataset.pcName;
+}
+
+$sysinfoClose.addEventListener('click', closeSystemModal);
+$sysinfoOverlay.addEventListener('click', (e) => {
+  if (e.target === $sysinfoOverlay) closeSystemModal();
+});
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$sysinfoOverlay.hasAttribute('hidden')) {
+    closeSystemModal();
+  }
+});
+
+function populateSystemInfo(name, info) {
+  const { os, cpu, memory, networkInterfaces } = info;
+  const cpuPct = cpu?.usedCpu ?? 0;
+  const memPct = memory?.memoryUsagePercentage ?? 0;
+  const cpuClass = cpuPct > 80 ? 'danger' : cpuPct > 50 ? 'warn' : '';
+  const memClass = memPct > 85 ? 'danger' : memPct > 65 ? 'warn' : '';
+
+  let html = `
+    <!-- Operating System Section -->
+    <div class="modal-section">
+      <h3 class="modal-section-title">Operating System</h3>
+      <div class="modal-kv"><span class="modal-kv-key">Hostname</span><span class="modal-kv-value">${escapeHtml(os?.hostname || 'Unknown')}</span></div>
+      <div class="modal-kv"><span class="modal-kv-key">Platform</span><span class="modal-kv-value">${escapeHtml(os?.platform || 'Unknown')} (${escapeHtml(os?.architecture || '')})</span></div>
+      <div class="modal-kv"><span class="modal-kv-key">OS Type</span><span class="modal-kv-value">${escapeHtml(os?.type || 'Unknown')} ${escapeHtml(os?.release || '')}</span></div>
+      <div class="modal-kv"><span class="modal-kv-key">Uptime</span><span class="modal-kv-value">${escapeHtml(os?.uptime || 'Unknown')}</span></div>
+    </div>
+
+    <!-- CPU Performance Section -->
+    <div class="modal-section">
+      <h3 class="modal-section-title">Processor Performance</h3>
+      <div class="modal-gauge-row">
+        <span class="modal-gauge-label">CPU Load</span>
+        <div class="modal-gauge-track">
+          <div class="modal-gauge-fill ${cpuClass}" style="width: ${Math.min(100, cpuPct).toFixed(1)}%"></div>
+        </div>
+        <span class="modal-gauge-value">${cpuPct.toFixed(1)}%</span>
+      </div>
+      <div class="modal-kv"><span class="modal-kv-key">Model</span><span class="modal-kv-value">${escapeHtml(cpu?.cores?.[0]?.model || 'Standard CPU')}</span></div>
+      <div class="modal-kv"><span class="modal-kv-key">Logical Cores</span><span class="modal-kv-value">${cpu?.cores?.length || 1}</span></div>
+      <div class="modal-kv"><span class="modal-kv-key">Idle Capacity</span><span class="modal-kv-value">${(cpu?.freeCpu ?? 0).toFixed(1)}%</span></div>
+    </div>
+
+    <!-- Memory Diagnostics Section -->
+    <div class="modal-section">
+      <h3 class="modal-section-title">Memory Allocation</h3>
+      <div class="modal-gauge-row">
+        <span class="modal-gauge-label">RAM Usage</span>
+        <div class="modal-gauge-track">
+          <div class="modal-gauge-fill ${memClass}" style="width: ${Math.min(100, memPct).toFixed(1)}%"></div>
+        </div>
+        <span class="modal-gauge-value">${memPct.toFixed(1)}%</span>
+      </div>
+      <div class="modal-kv"><span class="modal-kv-key">Total RAM</span><span class="modal-kv-value">${escapeHtml(memory?.totalMemory || '')}</span></div>
+      <div class="modal-kv"><span class="modal-kv-key">Used RAM</span><span class="modal-kv-value">${escapeHtml(memory?.usedMemory || '')}</span></div>
+      <div class="modal-kv"><span class="modal-kv-key">Available RAM</span><span class="modal-kv-value">${escapeHtml(memory?.freeMemory || '')}</span></div>
+    </div>
+  `;
+
+  // Network Interfaces
+  if (networkInterfaces && Object.keys(networkInterfaces).length > 0) {
+    html += `
+      <div class="modal-section">
+        <h3 class="modal-section-title">Network Adapters</h3>
+    `;
+    for (const [name, addrs] of Object.entries(networkInterfaces)) {
+      const ips = Array.isArray(addrs) ? addrs.map((a) => `${a.family}: ${a.address}`).join(', ') : '';
+      html += `
+        <div class="modal-kv">
+          <span class="modal-kv-key">${escapeHtml(name)}</span>
+          <span class="modal-kv-value">${escapeHtml(ips)}</span>
+        </div>
+      `;
+    }
+    html += `</div>`;
+  }
+
+  $sysinfoBody.innerHTML = html;
+}
+
+// ── Role-Specific Initialization ─────────────────────────────────────────────
+if (role === 'admin') {
+  $sidebar.removeAttribute('hidden');
+  $statusBar.removeAttribute('hidden');
+  updateAdminChatStatus();
+} else {
+  $sidebar.setAttribute('hidden', '');
+  $statusBar.setAttribute('hidden', '');
+  $sendBtn.removeAttribute('disabled');
+}
+
+window.addEventListener('load', () => {
+  $messageInput.focus();
 });

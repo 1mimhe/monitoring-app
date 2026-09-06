@@ -1,144 +1,168 @@
-import { Server, Socket } from 'socket.io';
-import logger from '../utils/logger';
+import { Server } from 'socket.io';
+import { RoomManager } from './room-manager';
+import logger from '../../../shared/logger';
+import { getSystemInfo } from '../../../shared/system';
 import { MessageTypes, Roles, SocketType } from './types';
-import { SystemUtilities } from '../utils/system';
 
-const userSockets = new Map<string, SocketType>();
-const adminSockets = new Map<string, SocketType>();
-const adminSelectedChats = new Map<string, string>();
-const systemUtilities = new SystemUtilities();
+/** How often to push system metrics to the admin (ms). */
+const INFO_INTERVAL_MS = 5_000;
+/** Percentage threshold above which a resource-usage alert is sent. */
+const ALERT_THRESHOLD = 70;
 
-export function registerSocketEvents(
-  socket: SocketType,
-  io: Server
-) {
+const rooms = new RoomManager();
+
+export function registerSocketEvents(socket: SocketType, _io: Server): void {
+  // ── join ───────────────────────────────────────────────────────────────────
   socket.on('join', async ({ pcName, room, role }, callback) => {
-    if (userSockets.has(`${pcName}:${room}`)) return callback({ error: 'This pc name already exists.' });
-   
+    if (!pcName?.trim() || !room?.trim()) {
+      return callback({ error: 'pcName and room are required.' });
+    }
+
+    // Prevent duplicate PC names in the same room (user side only)
+    if (role === Roles.User && rooms.hasUser(pcName, room)) {
+      return callback({ error: `PC name "${pcName}" is already taken in room "${room}".` });
+    }
+
     socket.join(room);
     socket.data.pcName = pcName;
-    socket.data.room = room;
-    socket.data.role = role;
-    
+    socket.data.room   = room;
+    socket.data.role   = role;
+
     if (role === Roles.Admin) {
-      adminSockets.set(room, socket);
-      const connectedUsers: string[] = [];
-      userSockets.forEach((_, key) => {
-        const [userPcName, userRoom] = key.split(':');
-        if (userRoom === room) {
-          connectedUsers.push(userPcName);
-        }
-      });
-      socket.emit('userList', connectedUsers);
-    }
-    
-    if (role === Roles.User) {
-      userSockets.set(`${pcName}:${room}`, socket);
-      
-      const adminSocket = adminSockets.get(room);
-      adminSocket?.emit('message', `User ${pcName} joined to the room.`, MessageTypes.System, 'System');
-      adminSocket?.emit('join', { pcName, room });
+      rooms.setAdmin(room, socket);
+      // Send currently connected users to the new admin
+      socket.emit('userList', rooms.getUsersInRoom(room));
 
+    } else if (role === Roles.User) {
+      rooms.addUser(pcName, room, socket);
+
+      const admin = rooms.getAdmin(room);
+      admin?.emit('message', `${pcName} joined the room.`, MessageTypes.System, 'System');
+      admin?.emit('join', { pcName, room });
+
+      // Push system metrics every INFO_INTERVAL_MS (non-blocking CPU measurement)
       socket.data.infoInterval = setInterval(async () => {
-        try {
-          const info = await systemUtilities.getSystemInfo();
-          adminSocket?.emit('info', info, pcName);
+        const currentAdmin = rooms.getAdmin(room);
+        if (!currentAdmin) return; // No admin online — skip the measurement
 
-          if (info.cpu.usedCpu >= 70) {
-            adminSocket?.emit('message',
-              `${socket.data.pcName} cpu usage is ${info.cpu.usedCpu}%`,
-              MessageTypes.Warning, 'System');
+        try {
+          const info = await getSystemInfo();
+          currentAdmin.emit('info', info, pcName);
+
+          if (info.cpu.usedCpu >= ALERT_THRESHOLD) {
+            currentAdmin.emit(
+              'message',
+              `${pcName}: CPU at ${info.cpu.usedCpu.toFixed(1)}%`,
+              MessageTypes.Warning, 'System'
+            );
           }
-          if (info.memory.memoryUsagePercentage >= 70) {
-            adminSocket?.emit('message',
-              `${socket.data.pcName} memory usage is ${info.memory.memoryUsagePercentage}%`,
-              MessageTypes.Warning, 'System');
+          if (info.memory.memoryUsagePercentage >= ALERT_THRESHOLD) {
+            currentAdmin.emit(
+              'message',
+              `${pcName}: Memory at ${info.memory.memoryUsagePercentage.toFixed(1)}%`,
+              MessageTypes.Warning, 'System'
+            );
           }
-        } catch (error) {
-          logger.error(`Error getting system info for ${pcName}:`, error);
+        } catch (err) {
+          logger.error(`System info error for ${pcName}`, err);
         }
-      }, 5000);
-      
-      socket.emit('message', `Welcome ${pcName}`, MessageTypes.System, 'System');
+      }, INFO_INTERVAL_MS);
+
+      socket.emit('message', `Welcome, ${pcName}!`, MessageTypes.System, 'System');
     }
-   
-    logger.info(`User joined -> ${pcName} in Room ${room} as ${role}`);
+
+    logger.info(`Joined → ${pcName} in room "${room}" as ${role}`);
     callback({ success: true });
   });
 
+  // ── selectChat ─────────────────────────────────────────────────────────────
   socket.on('selectChat', (selectedPcName, callback) => {
     if (socket.data.role !== Roles.Admin) {
-      return callback({ error: 'Only admins can select chats' });
+      return callback({ error: 'Only admins can select chats.' });
     }
-    
-    adminSelectedChats.set(socket.id, selectedPcName);
-    socket.emit('message', `Chatting with ${selectedPcName}`, MessageTypes.System, 'System');
+
+    rooms.selectChat(socket.id, selectedPcName);
+    socket.emit('message', `Now chatting with ${selectedPcName}.`, MessageTypes.System, 'System');
     callback({ success: true });
   });
 
+  // ── closeChat ──────────────────────────────────────────────────────────────
   socket.on('closeChat', (callback) => {
     if (socket.data.role !== Roles.Admin) {
-      return callback({ error: 'Only admins can clear chats' });
+      return callback({ error: 'Only admins can close chats.' });
     }
-    
-    adminSelectedChats.delete(socket.id);
+
+    rooms.clearSelectedChat(socket.id);
     socket.emit('message', 'Chat closed.', MessageTypes.System, 'System');
     callback({ success: true });
   });
 
+  // ── message ────────────────────────────────────────────────────────────────
   socket.on('message', (msg, callback) => {
-    logger.info(`Message - from ${socket.data.pcName} -> ${msg}`);
-    
-    if (socket.data.role === Roles.User) {
-      const adminSocket = adminSockets.get(socket.data.room);
-      adminSocket?.emit('message', msg, MessageTypes.OtherSide, socket.data.pcName);
+    const { pcName, room, role } = socket.data;
 
-      socket.emit('message', msg, MessageTypes.Normal, 'You');
-    } else if (socket.data.role === Roles.Admin) {
-      const selectedPcName = adminSelectedChats.get(socket.id);
-      if (selectedPcName) {
-        const targetSocket = userSockets.get(`${selectedPcName}:${socket.data.room}`);
-        if (targetSocket) {
-          targetSocket.emit('message', msg, MessageTypes.OtherSide, 'Admin');
-          socket.emit('message', msg, MessageTypes.Normal, `You to ${targetSocket.data.pcName}`);
-        } else {
-          socket.emit('error', `User ${selectedPcName} not found or disconnected`);
-        }
-      } else {
-        socket.emit('error', 'No chat selected. Use broadcast to send to all users.');
-      }
+    if (!msg?.trim()) {
+      return callback({ error: 'Message cannot be empty.' });
     }
-    
+
+    logger.debug(`Message from ${pcName}: ${msg}`);
+
+    if (role === Roles.User) {
+      const admin = rooms.getAdmin(room);
+      admin?.emit('message', msg, MessageTypes.OtherSide, pcName);
+      socket.emit('message', msg, MessageTypes.Normal, 'You');
+
+    } else if (role === Roles.Admin) {
+      const targetName = rooms.getSelectedChat(socket.id);
+      if (!targetName) {
+        return callback({ error: 'No chat selected. Use broadcast to message everyone.' });
+      }
+
+      const target = rooms.getUser(targetName, room);
+      if (!target) {
+        // Target disconnected since selection — clear stale selection
+        rooms.clearSelectedChat(socket.id);
+        return callback({ error: `${targetName} is no longer connected.` });
+      }
+
+      target.emit('message', msg, MessageTypes.OtherSide, 'Admin');
+      socket.emit('message', msg, MessageTypes.Normal, `You → ${targetName}`);
+    }
+
     callback({ success: true });
   });
 
+  // ── broadcast ──────────────────────────────────────────────────────────────
   socket.on('broadcast', (msg, callback) => {
-    logger.info(`Broadcast - from ${socket.data.pcName} -> ${msg}`);
-    
+    if (!msg?.trim()) {
+      return callback({ error: 'Broadcast message cannot be empty.' });
+    }
+
+    logger.debug(`Broadcast from ${socket.data.pcName}: ${msg}`);
     socket.broadcast.to(socket.data.room).emit('message', msg, MessageTypes.Broadcast, socket.data.pcName);
     socket.emit('message', msg, MessageTypes.Broadcast, 'You');
-    
     callback({ success: true });
   });
 
+  // ── disconnect ─────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
     const { pcName, room, role } = socket.data;
-    
+    if (!pcName) return; // Socket never completed the join handshake
+
     if (role === Roles.User) {
-      userSockets.delete(`${pcName}:${room}`);
-      
-      if (socket.data.infoInterval) {
-        clearInterval(socket.data.infoInterval);
-      }
-      
-      const adminSocket = adminSockets.get(room);
-      adminSocket?.emit('dis', pcName);
-      adminSocket?.emit('message', `User ${pcName} disconnected.`, MessageTypes.System, 'System');
+      rooms.removeUser(pcName, room);
+      clearInterval(socket.data.infoInterval);
+
+      const admin = rooms.getAdmin(room);
+      admin?.emit('dis', pcName);
+      admin?.emit('message', `${pcName} disconnected.`, MessageTypes.System, 'System');
+
     } else if (role === Roles.Admin) {
-      adminSockets.delete(socket.id);
-      adminSelectedChats.delete(socket.id);
+      // Bug fix: was deleting by socket.id — must delete by room key
+      rooms.removeAdmin(room);
+      rooms.clearSelectedChat(socket.id);
     }
-    
-    logger.warn(`User ${pcName} disconnected.`);
+
+    logger.info(`Disconnected → ${pcName} (${role}) from room "${room}"`);
   });
 }
