@@ -1,16 +1,23 @@
 {
-  "name": "monitor-app-central",
-  "version": "1.0.0",
-  "main": "app.js",
-  "scripts": {
-    "start": "nodemon app.js"
-  },
-  "keywords": [],
+  "name": "monitor-app-rest-central",
+  "version": "2.0.0",
+  "description": "REST Central-Manager dashboard for monitoring remote agents.",
   "author": "Mohammad Hosseini",
-  "license": "ISC",
-  "description": "",
+  "license": "MIT",
+  "main": "dist/app.js",
+  "scripts": {
+    "dev": "ts-node --files src/app.ts",
+    "build": "tsc",
+    "start": "node dist/app.js"
+  },
   "dependencies": {
-    "express": "^4.21.2",
-    "nodemon": "^3.1.9"
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.15.29",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
   }
 }

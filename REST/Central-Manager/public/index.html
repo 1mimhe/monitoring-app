@@ -1,240 +1,849 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Monitoring App</title>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Agent monitoring dashboard — view system metrics and manage remote agents." />
+  <title>Agent Dashboard — Monitoring App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
+    /* ── Design Tokens ──────────────────────────────────────────────── */
+    :root {
+      --bg-base:      #0a0e1a;
+      --bg-surface:   #111827;
+      --bg-card:      #1a2236;
+      --bg-card-hover:#1e2a42;
+      --border:       rgba(99, 179, 237, 0.12);
+      --border-hover: rgba(99, 179, 237, 0.3);
 
-body {
-      font-family: 'Poppins', sans-serif;
-      margin: 0;
-      padding: 0;
-      background: linear-gradient(to right, #f9f9f9, #e9efff);
-      color: #333;
+      --accent:       #38bdf8;
+      --accent-dim:   rgba(56, 189, 248, 0.15);
+      --accent-glow:  rgba(56, 189, 248, 0.4);
+      --green:        #4ade80;
+      --green-dim:    rgba(74, 222, 128, 0.12);
+      --yellow:       #facc15;
+      --yellow-dim:   rgba(250, 204, 21, 0.12);
+      --red:          #f87171;
+      --red-dim:      rgba(248, 113, 113, 0.12);
+
+      --text-primary:   #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted:     #475569;
+
+      --radius-sm:  6px;
+      --radius-md:  12px;
+      --radius-lg:  18px;
+
+      --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+      --shadow-glow: 0 0 30px rgba(56, 189, 248, 0.15);
+
+      --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .container {
-      width: 90%;
-      max-width: 800px;
-      margin: 20px auto;
-      padding: 20px;
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    /* ── Reset ──────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Base ───────────────────────────────────────────────────────── */
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
     }
 
-    h2 {
-      font-size: 1.8em;
-      margin-bottom: 15px;
-      color: #35898f;
-      text-align: center;
+    /* Subtle animated grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(56, 189, 248, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 189, 248, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
     }
 
-    form {
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    .layout {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    .header {
       display: flex;
-      flex-direction: column;
-      gap: 15px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      background: var(--accent-dim);
+      border: 1px solid var(--border-hover);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
+
+    .logo h1 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+    }
+
+    .logo span {
+      color: var(--accent);
+    }
+
+    .header-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* ── Connect Card ────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.75rem;
+      box-shadow: var(--shadow-card);
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+
+    .card:hover {
+      border-color: var(--border-hover);
+    }
+
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 1.25rem;
+    }
+
+    /* ── Form ───────────────────────────────────────────────────────── */
+    .form-row {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: flex-end;
     }
 
     .form-group {
       display: flex;
       flex-direction: column;
+      gap: 0.4rem;
+      flex: 1;
+      min-width: 140px;
     }
 
     label {
-      font-weight: 600;
-      margin-bottom: 5px;
-      color: #35898f;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--text-secondary);
     }
 
     input[type="text"] {
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      font-size: 1em;
-      transition: border-color 0.3s;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.6rem 0.9rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88rem;
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
     }
+
+    input[type="text"]::placeholder { color: var(--text-muted); }
 
     input[type="text"]:focus {
-      border-color: #35898f;
-      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
     }
 
-    button {
-      padding: 12px 18px;
-      background-color: #35898f;
-      color: #fff;
-      font-size: 1em;
-      font-weight: 600;
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.25rem;
       border: none;
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.88rem;
+      font-weight: 600;
       cursor: pointer;
-      transition: background-color 0.3s;
+      transition: all var(--transition);
+      white-space: nowrap;
     }
 
-    button:hover {
-      background-color: #35898f;
+    .btn-primary {
+      background: var(--accent);
+      color: #0a0e1a;
     }
 
-    .result {
-      font-size: 14px;
-      line-height: 1.5;
-      margin-top: 20px;
+    .btn-primary:hover:not(:disabled) {
+      background: #7dd3fc;
+      box-shadow: 0 4px 16px var(--accent-glow);
+      transform: translateY(-1px);
     }
 
-    .result .json-container {
-      padding: 15px;
-      background: #f4f8ff;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      max-height: 400px;
+    .btn-danger {
+      background: transparent;
+      color: var(--red);
+      border: 1px solid rgba(248, 113, 113, 0.3);
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: var(--red-dim);
+      border-color: var(--red);
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    /* ── Toast ──────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      top: 1.25rem;
+      right: 1.25rem;
+      padding: 0.75rem 1.25rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      font-weight: 500;
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      z-index: 9999;
+      pointer-events: none;
+      max-width: 320px;
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    #toast.toast-success { background: var(--green-dim); color: var(--green); border: 1px solid rgba(74, 222, 128, 0.3); }
+    #toast.toast-error   { background: var(--red-dim);   color: var(--red);   border: 1px solid rgba(248, 113, 113, 0.3); }
+    #toast.toast-info    { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--border-hover); }
+
+    /* ── Loading Spinner ─────────────────────────────────────────────── */
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(10, 14, 26, 0.3);
+      border-top-color: #0a0e1a;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: none;
+    }
+
+    .spinner.active { display: inline-block; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Metrics Grid ────────────────────────────────────────────────── */
+    #metrics-section { display: none; }
+    #metrics-section.visible { display: block; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 2rem 0 1rem;
+    }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .last-updated {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
+      transition: all var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--accent);
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+
+    .metric-card:hover { border-color: var(--border-hover); }
+    .metric-card:hover::before { opacity: 1; }
+
+    .metric-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .metric-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.6rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      line-height: 1;
+      margin-bottom: 0.75rem;
+    }
+
+    .metric-value .unit {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    /* Progress bar gauge */
+    .gauge-track {
+      height: 5px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .gauge-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      background: var(--accent);
+    }
+
+    .gauge-fill.warn   { background: var(--yellow); }
+    .gauge-fill.danger { background: var(--red);    }
+
+    /* ── Info Sections ───────────────────────────────────────────────── */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .info-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .info-card-header {
+      padding: 0.85rem 1.25rem;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .info-card-body {
+      padding: 1rem 1.25rem;
+    }
+
+    .kv-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      font-size: 0.85rem;
+    }
+
+    .kv-row:last-child { border-bottom: none; }
+
+    .kv-key {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .kv-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      text-align: right;
+      max-width: 55%;
+      word-break: break-all;
+    }
+
+    /* ── Process Table ───────────────────────────────────────────────── */
+    .table-wrap {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      margin-top: 1rem;
+    }
+
+    .table-header {
+      padding: 0.85rem 1.25rem;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .table-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    .table-count {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .processes-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .processes-table thead th {
+      text-align: left;
+      padding: 0.6rem 1rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .processes-table tbody td {
+      padding: 0.45rem 1rem;
+      color: var(--text-secondary);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+    }
+
+    .processes-table tbody tr:hover td {
+      background: rgba(56, 189, 248, 0.03);
+      color: var(--text-primary);
+    }
+
+    .processes-table tbody tr:last-child td { border-bottom: none; }
+
+    .table-scroll {
+      max-height: 280px;
       overflow-y: auto;
     }
 
-    .json-key {
+    /* ── Network ─────────────────────────────────────────────────────── */
+    .net-iface {
+      margin-bottom: 1rem;
+    }
+
+    .net-iface-name {
+      font-size: 0.8rem;
       font-weight: 600;
-      color: #35898f;
+      color: var(--accent);
+      margin-bottom: 0.35rem;
+      font-family: 'JetBrains Mono', monospace;
     }
 
-    .json-value {
-      font-family: monospace;
-      color: #333;
+    .net-addr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      padding: 0.2rem 0;
     }
 
-    .json-object {
-      margin-left: 20px;
-      border-left: 2px solid #ddd;
-      padding-left: 10px;
+    .net-family-badge {
+      font-size: 0.65rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-weight: 600;
     }
 
-    .toggle {
-      font-size: 0.9em;
-      cursor: pointer;
-      color: #35898f;
-      margin-bottom: 5px;
+    /* ── Responsive ──────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .form-row { flex-direction: column; }
+      .header { flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+      .metric-value { font-size: 1.3rem; }
     }
 
-    .toggle:hover {
-      text-decoration: underline;
+    /* ── Animations ──────────────────────────────────────────────────── */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
 
-    @media (max-width: 600px) {
-      .container {
-        padding: 15px;
-      }
+    .fade-in { animation: fadeInUp 0.35s ease forwards; }
 
-      h2 {
-        font-size: 1.5em;
-      }
-
-      button {
-        font-size: 0.9em;
-      }
-    }
+    .stagger > * { opacity: 0; animation: fadeInUp 0.35s ease forwards; }
+    .stagger > *:nth-child(1) { animation-delay: 0.05s; }
+    .stagger > *:nth-child(2) { animation-delay: 0.1s;  }
+    .stagger > *:nth-child(3) { animation-delay: 0.15s; }
+    .stagger > *:nth-child(4) { animation-delay: 0.2s;  }
+    .stagger > *:nth-child(5) { animation-delay: 0.25s; }
+    .stagger > *:nth-child(6) { animation-delay: 0.3s;  }
   </style>
 </head>
 <body>
+  <div id="toast"></div>
 
-<div class="container">
-  <h2>Enter Agent IP and Port</h2>
-  <form id="dataForm">
-    <div class="form-group">
-      <label for="ip">IP Address:</label>
-      <input type="text" id="ip" name="ip" placeholder="Enter IP Address" required>
-    </div>
-    <div class="form-group">
-      <label for="port">Port:</label>
-      <input type="text" id="port" name="port" placeholder="Enter Port Number" required>
-    </div>
-    <button type="submit">Submit</button>
-    <button type="button" id="rebootButton" style="background-color: #615959;">Reboot System</button>
-  </form>
-</div>
+  <div class="layout">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <div class="logo-icon">📡</div>
+        <h1>Agent <span>Monitor</span></h1>
+      </div>
+      <div class="header-time" id="header-time"></div>
+    </header>
 
-<div class="container">
-  <h2>Result</h2>
-  <div id="result" class="result">
-    <div id="jsonOutput" class="json-container"></div>
+    <!-- Connect Form -->
+    <div class="card fade-in">
+      <p class="card-title">Connect to Agent</p>
+      <form id="connect-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="ip">IP Address</label>
+            <input id="ip" type="text" placeholder="192.168.1.100" required />
+          </div>
+          <div class="form-group" style="max-width:120px;">
+            <label for="port">Port</label>
+            <input id="port" type="text" placeholder="3333" value="3333" required />
+          </div>
+          <button type="submit" class="btn btn-primary" id="fetch-btn">
+            <div class="spinner" id="fetch-spinner"></div>
+            <span id="fetch-label">Fetch Info</span>
+          </button>
+          <button type="button" class="btn btn-danger" id="reboot-btn" disabled>
+            ⚠ Reboot
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Metrics (hidden until data loads) -->
+    <section id="metrics-section">
+      <div class="section-header">
+        <span class="section-title">System Overview</span>
+        <span class="last-updated" id="last-updated"></span>
+      </div>
+
+      <div class="metrics-grid stagger" id="metrics-grid"></div>
+
+      <div class="info-grid" id="info-grid" style="margin-top:1rem;"></div>
+
+      <div class="table-wrap fade-in" id="process-table-wrap" style="display:none;"></div>
+
+      <div class="info-card fade-in" id="network-card" style="display:none;margin-top:1rem;"></div>
+    </section>
   </div>
-</div>
 
-<script>
-  document.getElementById('dataForm').addEventListener('submit', async function (e) {
-    e.preventDefault();
-
-    const ip = document.getElementById('ip').value;
-    const port = document.getElementById('port').value;
-    
-    try {
-      const response = await (await fetch(`http://${ip}:${port}/system-info`)).json();
-      
-      if (!response.success) throw new Error('Failed to fetch data.');
-      visualizeJson(response);
-    } catch (error) {
-      document.getElementById('jsonOutput').innerHTML = `<p style="color:red;">Error: ${error.message}</p>`;
+  <script>
+    // ── Live clock ─────────────────────────────────────────────────────────────
+    function updateClock() {
+      document.getElementById('header-time').textContent = new Date().toLocaleTimeString();
     }
-  });
+    setInterval(updateClock, 1000);
+    updateClock();
 
-  document.getElementById('rebootButton').addEventListener('click', async function () {
-    const ip = document.getElementById('ip').value;
-    const port = document.getElementById('port').value;
+    // ── Toast ──────────────────────────────────────────────────────────────────
+    let toastTimer = null;
+    function showToast(msg, type = 'info') {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = `show toast-${type}`;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+    }
 
-    if (confirm('Are you sure you want to reboot the system?')) {
+    // ── Fetch info ─────────────────────────────────────────────────────────────
+    const form        = document.getElementById('connect-form');
+    const fetchBtn    = document.getElementById('fetch-btn');
+    const fetchLabel  = document.getElementById('fetch-label');
+    const fetchSpinner= document.getElementById('fetch-spinner');
+    const rebootBtn   = document.getElementById('reboot-btn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const ip   = document.getElementById('ip').value.trim();
+      const port = document.getElementById('port').value.trim();
+
+      setFetching(true);
       try {
-        const response = await (await fetch(`http://${ip}:${port}/reboot-system`, {
-          method: 'POST'
-        })).json();
-        
-        if (!response.success) throw new Error('Failed to reboot system.');
-
-        alert('System is rebooting...');
-      } catch (error) {
-        alert(`Error: ${error.message}`);
+        const res  = await fetch(`http://${ip}:${port}/system-info`);
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Request failed');
+        renderDashboard(data.result, data.timestamp);
+        rebootBtn.disabled = false;
+        showToast('System info loaded.', 'success');
+      } catch (err) {
+        showToast(`Error: ${err.message}`, 'error');
+      } finally {
+        setFetching(false);
       }
-    }
-  });
-
-  function visualizeJson(data, parent = null) {
-    const container = parent || document.getElementById('jsonOutput');
-    container.innerHTML = '';
-
-    Object.keys(data).forEach(key => {
-      const value = data[key];
-      const keyElement = document.createElement('div');
-      keyElement.innerHTML = `<span class="json-key">${key}:</span>`;
-
-      if (typeof value === 'object' && value !== null) {
-        const toggle = document.createElement('span');
-        toggle.textContent = ' [Expand]';
-        toggle.classList.add('toggle');
-        toggle.addEventListener('click', () => {
-          nestedContainer.style.display =
-            nestedContainer.style.display === 'none' ? 'block' : 'none';
-          toggle.textContent =
-            toggle.textContent === ' [Expand]' ? ' [Collapse]' : ' [Expand]';
-        });
-
-        keyElement.appendChild(toggle);
-
-        const nestedContainer = document.createElement('div');
-        nestedContainer.classList.add('json-object');
-        nestedContainer.style.display = 'none';
-        visualizeJson(value, nestedContainer);
-        keyElement.appendChild(nestedContainer);
-      } else {
-        keyElement.innerHTML += ` <span class="json-value">${JSON.stringify(
-          value,
-          null,
-          2
-        )}</span>`;
-      }
-
-      container.appendChild(keyElement);
     });
-  }
-</script>
 
+    function setFetching(loading) {
+      fetchBtn.disabled = loading;
+      fetchSpinner.className = loading ? 'spinner active' : 'spinner';
+      fetchLabel.textContent = loading ? 'Loading…' : 'Fetch Info';
+    }
+
+    // ── Reboot ─────────────────────────────────────────────────────────────────
+    rebootBtn.addEventListener('click', async () => {
+      const ip   = document.getElementById('ip').value.trim();
+      const port = document.getElementById('port').value.trim();
+      if (!confirm(`Reboot the system at ${ip}:${port}? This action cannot be undone.`)) return;
+
+      try {
+        const res  = await fetch(`http://${ip}:${port}/reboot-system`, { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Reboot failed');
+        showToast('Reboot command sent. System will restart shortly.', 'info');
+        rebootBtn.disabled = true;
+      } catch (err) {
+        showToast(`Error: ${err.message}`, 'error');
+      }
+    });
+
+    // ── Render Dashboard ───────────────────────────────────────────────────────
+    function renderDashboard(info, timestamp) {
+      const section = document.getElementById('metrics-section');
+      section.classList.add('visible');
+      document.getElementById('last-updated').textContent =
+        'Updated ' + new Date(timestamp).toLocaleTimeString();
+
+      renderMetrics(info);
+      renderInfoCards(info);
+      renderProcessTable(info.processes);
+      renderNetwork(info.networkInterfaces);
+    }
+
+    function gaugeColor(pct) {
+      if (pct >= 85) return 'danger';
+      if (pct >= 70) return 'warn';
+      return '';
+    }
+
+    function renderMetrics(info) {
+      const grid = document.getElementById('metrics-grid');
+      const cpuPct = info.cpu.usedCpu;
+      const memPct = info.memory.memoryUsagePercentage;
+
+      const metrics = [
+        {
+          label: 'CPU Usage',
+          value: `${cpuPct.toFixed(1)}`,
+          unit: '%',
+          pct: cpuPct,
+        },
+        {
+          label: 'Memory Used',
+          value: `${info.memory.usedMemory}`,
+          unit: ' GiB',
+          sub: `of ${info.memory.totalMemory} GiB`,
+          pct: memPct,
+        },
+        {
+          label: 'Free Memory',
+          value: `${info.memory.freeMemory}`,
+          unit: ' GiB',
+          pct: null,
+        },
+        {
+          label: 'CPU Cores',
+          value: `${info.cpu.coreCount ?? info.cpu.cores?.length ?? '—'}`,
+          sub: info.cpu.model?.slice(0, 30) ?? '',
+          pct: null,
+        },
+        {
+          label: 'Hostname',
+          value: info.os.hostname,
+          pct: null,
+        },
+        {
+          label: 'Uptime',
+          value: info.os.uptime,
+          pct: null,
+        },
+      ];
+
+      grid.innerHTML = '';
+      metrics.forEach(m => {
+        const card = document.createElement('div');
+        card.className = 'metric-card';
+
+        const colorClass = m.pct != null ? gaugeColor(m.pct) : '';
+
+        card.innerHTML = `
+          <div class="metric-label">${m.label}</div>
+          <div class="metric-value">
+            ${m.value}<span class="unit">${m.unit ?? ''}</span>
+          </div>
+          ${m.sub ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem;">${m.sub}</div>` : ''}
+          ${m.pct != null ? `
+            <div class="gauge-track">
+              <div class="gauge-fill ${colorClass}" style="width:${Math.min(m.pct,100)}%"></div>
+            </div>` : ''}
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function renderInfoCards(info) {
+      const grid = document.getElementById('info-grid');
+      grid.innerHTML = '';
+
+      const osRows = {
+        'Platform':     info.os.platform,
+        'OS Type':      info.os.type,
+        'Release':      info.os.release,
+        'Architecture': info.os.architecture,
+      };
+
+      const cpuRows = {
+        'Model':     info.cpu.model ?? (info.cpu.cores?.[0]?.model ?? '—'),
+        'Cores':     info.cpu.coreCount ?? info.cpu.cores?.length ?? '—',
+        'Used CPU':  `${info.cpu.usedCpu.toFixed(2)}%`,
+        'Free CPU':  `${info.cpu.freeCpu.toFixed(2)}%`,
+      };
+
+      const memRows = {
+        'Total':   `${info.memory.totalMemory} GiB`,
+        'Used':    `${info.memory.usedMemory} GiB`,
+        'Free':    `${info.memory.freeMemory} GiB`,
+        'Usage':   `${info.memory.memoryUsagePercentage.toFixed(1)}%`,
+      };
+
+      [[' Operating System', osRows], [' CPU', cpuRows], [' Memory', memRows]]
+        .forEach(([title, rows]) => {
+          const card = document.createElement('div');
+          card.className = 'info-card fade-in';
+          card.innerHTML = `
+            <div class="info-card-header">${title}</div>
+            <div class="info-card-body">
+              ${Object.entries(rows).map(([k, v]) => `
+                <div class="kv-row">
+                  <span class="kv-key">${k}</span>
+                  <span class="kv-value">${v}</span>
+                </div>`).join('')}
+            </div>`;
+          grid.appendChild(card);
+        });
+    }
+
+    function renderProcessTable(processes) {
+      const wrap = document.getElementById('process-table-wrap');
+      if (!processes || processes.length === 0) { wrap.style.display = 'none'; return; }
+      wrap.style.display = 'block';
+
+      const keys = Object.keys(processes[0]).slice(0, 5); // First 5 columns only
+      const rows = processes.slice(0, 80); // Cap at 80 rows
+
+      wrap.innerHTML = `
+        <div class="table-header">
+          <span class="table-title"> Running Processes</span>
+          <span class="table-count">${processes.length} processes</span>
+        </div>
+        <div class="table-scroll">
+          <table class="processes-table">
+            <thead><tr>${keys.map(k => `<th>${k}</th>`).join('')}</tr></thead>
+            <tbody>
+              ${rows.map(p =>
+                `<tr>${keys.map(k => `<td>${p[k] ?? ''}</td>`).join('')}</tr>`
+              ).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    function renderNetwork(interfaces) {
+      const card = document.getElementById('network-card');
+      if (!interfaces) { card.style.display = 'none'; return; }
+      card.style.display = 'block';
+
+      const entries = Object.entries(interfaces)
+        .filter(([, addrs]) => addrs && addrs.length > 0);
+
+      if (entries.length === 0) { card.style.display = 'none'; return; }
+
+      card.innerHTML = `
+        <div class="info-card-header"> Network Interfaces</div>
+        <div class="info-card-body">
+          ${entries.map(([name, addrs]) => `
+            <div class="net-iface">
+              <div class="net-iface-name">${name}</div>
+              ${(addrs ?? []).map(a => `
+                <div class="net-addr">
+                  <span>${a.address}</span>
+                  <span class="net-family-badge">${a.family}</span>
+                </div>`).join('')}
+            </div>`).join('')}
+        </div>`;
+    }
+  </script>
 </body>
 </html>
